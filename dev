@@ -1,0 +1,216 @@
+#!/bin/bash
+
+# Laravel Data Docs Development Script
+# Usage: ./dev {command}
+
+set -e
+
+# Container configuration
+CONTAINER_NAME="laravel-data-docs-php-1"
+COMPOSE_FILE="docker-compose.dev.yml"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Helper functions for colored output
+print_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Ensure container is running
+ensure_running() {
+    if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+        print_info "Starting container..."
+        docker compose -f "$COMPOSE_FILE" up -d
+        sleep 1
+    fi
+}
+
+# Execute command in running container
+exec_in_container() {
+    docker exec -it "$CONTAINER_NAME" "$@"
+}
+
+# Docker management commands (run on host)
+case $1 in
+    "build")
+        print_info "Building Docker development image..."
+        docker compose -f "$COMPOSE_FILE" build --no-cache
+        ;;
+    "up")
+        print_info "Starting development services..."
+        docker compose -f "$COMPOSE_FILE" up -d
+        print_info "Container is running. Use './dev pest', './dev pint', etc. to run commands."
+        ;;
+    "down")
+        print_info "Stopping development services..."
+        docker compose -f "$COMPOSE_FILE" down
+        ;;
+    "restart")
+        print_info "Restarting development services..."
+        docker compose -f "$COMPOSE_FILE" restart
+        ;;
+    "logs")
+        docker compose -f "$COMPOSE_FILE" logs -f php
+        ;;
+    "reset")
+        print_warning "Resetting development environment..."
+        docker compose -f "$COMPOSE_FILE" down -v
+        docker compose -f "$COMPOSE_FILE" build --no-cache
+        docker compose -f "$COMPOSE_FILE" up -d
+        print_info "Installing dependencies..."
+        exec_in_container composer install --prefer-dist --no-progress --no-suggest
+        print_info "Reset complete!"
+        ;;
+
+    # Development commands (run in container)
+    "install")
+        ensure_running
+        print_info "Installing Composer dependencies..."
+        exec_in_container composer install --prefer-dist --no-progress --no-suggest
+        ;;
+    "update")
+        ensure_running
+        print_info "Updating Composer dependencies..."
+        exec_in_container composer update --prefer-dist --no-progress --no-suggest
+        ;;
+    "test")
+        ensure_running
+        print_info "Running PHPUnit tests..."
+        exec_in_container vendor/bin/phpunit
+        ;;
+    "test-coverage")
+        ensure_running
+        print_info "Running tests with coverage..."
+        exec_in_container vendor/bin/phpunit --coverage-html build/coverage
+        print_info "Coverage report generated in build/coverage/"
+        ;;
+    "cs-fix")
+        ensure_running
+        print_info "Fixing code style with PHP CS Fixer..."
+        exec_in_container bash -c "if [ -f vendor/bin/php-cs-fixer ]; then vendor/bin/php-cs-fixer fix; else php-cs-fixer fix; fi"
+        ;;
+    "cs-check")
+        ensure_running
+        print_info "Checking code style..."
+        exec_in_container bash -c "if [ -f vendor/bin/php-cs-fixer ]; then vendor/bin/php-cs-fixer fix --dry-run --diff; else php-cs-fixer fix --dry-run --diff; fi"
+        ;;
+    "analyse"|"phpstan")
+        ensure_running
+        print_info "Running static analysis with PHPStan..."
+        exec_in_container bash -c "if [ -f vendor/bin/phpstan ]; then vendor/bin/phpstan analyse --memory-limit=256M; else phpstan analyse --memory-limit=256M; fi"
+        ;;
+    "pest")
+        ensure_running
+        print_info "Running Pest tests..."
+        shift
+        exec_in_container vendor/bin/pest "$@"
+        ;;
+    "pint")
+        ensure_running
+        print_info "Running Pint code formatter..."
+        shift
+        exec_in_container vendor/bin/pint "$@"
+        ;;
+    "coverage")
+        ensure_running
+        print_info "Running tests with coverage check..."
+        exec_in_container vendor/bin/pest --coverage-text=coverage.txt --only-summary-for-coverage-text
+        shift
+        exec_in_container bash check-coverage.sh coverage.txt "$@"
+        ;;
+    "quality")
+        ensure_running
+        print_info "Running full quality checks..."
+        echo "1. Code Style Check..."
+        exec_in_container vendor/bin/pint --test
+        echo -e "\n2. Static Analysis..."
+        exec_in_container bash -c "if [ -f vendor/bin/phpstan ]; then vendor/bin/phpstan analyse --memory-limit=256M; else phpstan analyse --memory-limit=256M; fi"
+        echo -e "\n3. Tests with Coverage..."
+        exec_in_container vendor/bin/pest --coverage-text=coverage.txt --only-summary-for-coverage-text
+        exec_in_container bash check-coverage.sh coverage.txt --min-method=80 --min-line=80
+        print_info "All quality checks completed!"
+        ;;
+    "shell"|"sh")
+        ensure_running
+        print_info "Starting interactive shell in container..."
+        exec_in_container bash
+        ;;
+    "composer")
+        ensure_running
+        shift
+        exec_in_container composer "$@"
+        ;;
+    "php")
+        ensure_running
+        shift
+        exec_in_container php "$@"
+        ;;
+    "help"|"--help"|"-h"|"")
+        echo "Laravel Data Docs Development Helper"
+        echo ""
+        echo "Usage: ./dev {command}"
+        echo ""
+        echo "Getting Started:"
+        echo "  1. Start the container:  ./dev up"
+        echo "  2. Run commands:         ./dev pest"
+        echo "  3. Stop when done:       ./dev down"
+        echo ""
+        echo "Development Commands (run in container):"
+        echo "  install        Install Composer dependencies"
+        echo "  update         Update Composer dependencies"
+        echo "  test           Run PHPUnit tests"
+        echo "  test-coverage  Run tests with HTML coverage report"
+        echo "  cs-fix         Fix code style issues"
+        echo "  cs-check       Check code style (dry-run)"
+        echo "  analyse        Run PHPStan static analysis"
+        echo "  pest [args]    Run Pest tests"
+        echo "  pint [args]    Run Pint code formatter"
+        echo "  coverage [options]  Run tests with coverage check"
+        echo "  quality        Run all quality checks (style, analysis, tests with 80% method+line coverage)"
+        echo "  shell          Start interactive shell in container"
+        echo "  composer       Run composer commands"
+        echo "  php            Run PHP commands"
+        echo ""
+        echo "Docker Commands (manage container lifecycle):"
+        echo "  build          Rebuild Docker development image"
+        echo "  up             Start development container (long-running)"
+        echo "  down           Stop development container"
+        echo "  restart        Restart development container"
+        echo "  logs           View PHP container logs"
+        echo "  reset          Reset entire development environment"
+        echo ""
+        echo "Examples:"
+        echo "  ./dev up                              # Start container (do this once)"
+        echo "  ./dev pest                            # Run all tests (instant)"
+        echo "  ./dev pest tests/Unit/SomeTest.php    # Run specific test"
+        echo "  ./dev coverage                        # Display coverage without checks"
+        echo "  ./dev coverage --min-method=80        # Enforce 80% method coverage"
+        echo "  ./dev coverage --min-line=80 --min-method=80  # Enforce multiple thresholds"
+        echo "  ./dev pint src/                       # Format specific directory"
+        echo "  ./dev composer require new/package    # Install package"
+        echo "  ./dev php -v                          # Check PHP version"
+        echo "  ./dev shell                           # Interactive shell"
+        echo "  ./dev down                            # Stop container when done"
+        echo ""
+        echo "Note: The container stays running for fast command execution."
+        echo "      Commands auto-start the container if it's not running."
+        ;;
+    *)
+        print_error "Unknown command: $1"
+        echo "Run './dev help' to see available commands."
+        exit 1
+        ;;
+esac
+

@@ -1,0 +1,18 @@
+services:
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+      - composer-cache:/home/developer/.composer
+    working_dir: /app
+    tty: true
+    stdin_open: true
+    command: tail -f /dev/null
+    environment:
+      - COMPOSER_CACHE_DIR=/home/developer/.composer/cache
+
+volumes:
+  composer-cache:
+    driver: local
