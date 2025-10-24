@@ -1,0 +1,36 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Documentation
+*.md
+docs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing and Coverage
+build/
+.phpunit.cache/
+coverage/
+
+# Cache and temporary files
+vendor/
+node_modules/
+.env*
+composer.lock
+
+# Logs
+*.log

@@ -1,0 +1,44 @@
+FROM php:8.4-cli
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    unzip \
+    git \
+    libonig-dev \
+    libzip-dev \
+    libxml2-dev \
+    libcurl4-openssl-dev \
+    && docker-php-ext-install pdo mbstring zip xml curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install PCOV for code coverage
+RUN pecl install pcov \
+    && docker-php-ext-enable pcov
+
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Install Node.js (for any frontend assets or build tools)
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs
+
+# Set working directory
+WORKDIR /app
+
+# Configure Composer to allow plugins
+RUN composer global config allow-plugins.pestphp/pest-plugin true \
+    && composer global config allow-plugins.friendsofphp/php-cs-fixer true
+
+# Install global development tools
+RUN composer global require friendsofphp/php-cs-fixer \
+    && composer global require phpstan/phpstan
+
+# Add composer global bin to PATH
+ENV PATH="${PATH}:/root/.composer/vendor/bin"
+
+# Set up permissions
+RUN useradd -m -u 1000 developer \
+    && chown -R developer:developer /app
+
+USER developer
