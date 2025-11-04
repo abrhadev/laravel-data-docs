@@ -1,8 +1,8 @@
 # Laravel Data Docs
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/abrha/laravel-data-docs.svg?style=flat-square)](https://packagist.org/packages/abrha/laravel-data-docs)
-[![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/abrha/laravel-data-docs/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/abrha/laravel-data-docs/actions?query=workflow%3Arun-tests+branch%3Amain)
-[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/abrha/laravel-data-docs/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/abrha/laravel-data-docs/actions?query=workflow%3A"Fix+PHP+code+style+issues"+branch%3Amain)
+[![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/abrhadev/laravel-data-docs/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/abrhadev/laravel-data-docs/actions?query=workflow%3Arun-tests+branch%3Amain)
+[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/abrhadev/laravel-data-docs/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/abrhadev/laravel-data-docs/actions?query=workflow%3A"Fix+PHP+code+style+issues"+branch%3Amain)
 [![Total Downloads](https://img.shields.io/packagist/dt/abrha/laravel-data-docs.svg?style=flat-square)](https://packagist.org/packages/abrha/laravel-data-docs)
 
 Generate beautiful API documentation automatically from [Spatie's Laravel Data](https://spatie.be/docs/laravel-data/) classes. This package integrates seamlessly with [Knuckles Scribe](https://scribe.knuckles.wtf/) to extract request and response schemas directly from your Data DTOs, eliminating manual documentation of API parameters.
