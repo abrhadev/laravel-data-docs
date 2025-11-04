@@ -24,16 +24,27 @@ final class TypeDescriptionStage implements ParameterPipelineStage
     public function process(ParameterContext $context): ParameterContext
     {
         if ($context->enumInfo) {
-            $context->description = $this->getEnumDescription($context);
+            $enumDesc = $this->getEnumDescription($context);
+            $context->description = $this->prependDescription($enumDesc, $context->description);
 
             return $context;
         }
 
         if ($context->type && isset(self::TYPE_DESCRIPTIONS[$context->type])) {
-            $context->description = self::TYPE_DESCRIPTIONS[$context->type];
+            $typeDesc = self::TYPE_DESCRIPTIONS[$context->type];
+            $context->description = $this->prependDescription($typeDesc, $context->description);
         }
 
         return $context;
+    }
+
+    private function prependDescription(string $typeDescription, string $existingDescription): string
+    {
+        if ($existingDescription === '') {
+            return $typeDescription;
+        }
+
+        return $typeDescription . ' ' . $existingDescription;
     }
 
     private function getEnumDescription(ParameterContext $context): string
