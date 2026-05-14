@@ -73,7 +73,7 @@ it('sets OpenAPI fields correctly', function ($propertyName, $expectedFields) {
 })->with([
     ['username', ['type' => 'string', 'minLength' => 3]],
     ['title', ['type' => 'string', 'maxLength' => 100]],
-    ['age', ['type' => 'integer', 'minimum' => 18]],
+    ['age', ['type'   => 'integer', 'minimum' => 18]],
     ['score', ['type' => 'integer', 'exclusiveMinimum' => 0]],
 ]);
 

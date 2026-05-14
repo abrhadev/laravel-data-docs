@@ -51,7 +51,7 @@ final class TypeDescriptionStage implements ParameterPipelineStage
     {
         $enumDescriptions = array_map(
             fn($case) => match ($context->enumInfo->enumType) {
-                EnumType::PURE => "<code>{$case->name}</code>",
+                EnumType::PURE                                => "<code>{$case->name}</code>",
                 EnumType::STRING_BACKED, EnumType::INT_BACKED => "<code>{$case->name}</code> ({$case->value})",
             },
             $context->enumInfo->cases

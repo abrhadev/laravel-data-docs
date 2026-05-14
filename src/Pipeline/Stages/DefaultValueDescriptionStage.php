@@ -21,10 +21,10 @@ final class DefaultValueDescriptionStage implements ParameterPipelineStage
     {
         $defaultValue = $context->property->defaultValue ?? null;
         $value = match (true) {
-            $defaultValue instanceof \UnitEnum => $defaultValue->name,
-            is_bool($context->default)         => $context->default ? 'true' : 'false',
+            $defaultValue instanceof \UnitEnum                        => $defaultValue->name,
+            is_bool($context->default)                                => $context->default ? 'true' : 'false',
             is_array($context->default), is_object($context->default) => json_encode($context->default),
-            default => $context->default,
+            default                                                   => $context->default,
         };
 
         return "Defaults to <code>{$value}</code>.";
