@@ -10,7 +10,7 @@ Generate beautiful API documentation automatically from [Spatie's Laravel Data](
 ## Features
 
 - **Automatic Parameter Extraction**: Automatically generates API documentation from Laravel Data classes
-- **Smart Attributes**: Control documentation with `#[Hidden]`, `#[Example]`, `#[QueryParameter]`, and `#[ResponseData]` attributes
+- **Smart Attributes**: Control documentation with `#[Hidden]`, `#[Example]`, `#[Description]`, `#[QueryParameter]`, and `#[ResponseData]` attributes
 - **Laravel Data Validation Support**: Automatic OpenAPI documentation for 30+ built-in Laravel Data validation attributes (`#[Email]`, `#[Min]`, `#[Max]`, `#[Uuid]`, etc.)
 - **Nested Objects Support**: Handles nested Data objects and arrays with automatic dot notation and array notation
 - **Type-Safe**: Leverages PHP 8.1+ attributes and Laravel Data's type system
@@ -182,6 +182,29 @@ class ProductData extends Data
         
         #[Example(true)]
         public bool $inStock,
+    ) {}
+}
+```
+
+### `#[Description]`
+
+Adds one or more custom description strings to a parameter. These are appended after the generated type sentence and before validation sentences. The attribute is repeatable and accepts one or more strings.
+
+```php
+use Abrha\LaravelDataDocs\Attributes\Description;
+
+class UserData extends Data
+{
+    public function __construct(
+        #[Description('The unique identifier of the user')]
+        public string $id,
+
+        #[Description('First sentence.', 'Second sentence.')]
+        public string $name,
+
+        #[Description('Line A')]
+        #[Description('Line B')]
+        public string $notes,
     ) {}
 }
 ```

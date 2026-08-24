@@ -4,6 +4,7 @@ namespace Abrha\LaravelDataDocs\AttributeProcessing;
 
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\BetweenProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DateFormatProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DescriptionProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DigitsBetweenProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DigitsProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\EndsWithProcessor;
@@ -52,6 +53,7 @@ use Spatie\LaravelData\Attributes\Validation\Ulid;
 use Spatie\LaravelData\Attributes\Validation\Uppercase;
 use Spatie\LaravelData\Attributes\Validation\Url;
 use Spatie\LaravelData\Attributes\Validation\Uuid;
+use Abrha\LaravelDataDocs\Attributes\Description;
 use Abrha\LaravelDataDocs\Attributes\Example;
 
 final class AttributeProcessorRegistry
@@ -129,6 +131,7 @@ final class AttributeProcessorRegistry
         $this->register(LessThanOrEqualTo::class, new LessThanOrEqualToProcessor());
 
         $this->register(Example::class, new ExampleProcessor());
+        $this->register(Description::class, new DescriptionProcessor());
         $this->register(QueryParameter::class, new QueryParameterProcessor());
     }
 }

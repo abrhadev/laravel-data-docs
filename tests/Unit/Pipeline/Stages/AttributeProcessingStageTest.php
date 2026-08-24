@@ -1,5 +1,6 @@
 <?php
 
+use Abrha\LaravelDataDocs\Attributes\Description;
 use Abrha\LaravelDataDocs\Pipeline\Context\ParameterContext;
 use Abrha\LaravelDataDocs\Pipeline\Stages\AttributeProcessingStage;
 use Spatie\LaravelData\Attributes\Validation\Email;
@@ -118,4 +119,48 @@ it('combines descriptions properly with empty base description', function () {
     $result = $this->stage->process($context);
 
     expect($result->description)->toBe('Must be a valid email address.');
+});
+
+it('combines custom descriptions before validation descriptions', function () {
+    $testData = new class ('test@example.com') extends Data {
+        public function __construct(
+            #[Description('The user\'s email.')]
+            #[Email]
+            public string $email,
+        ) {}
+    };
+
+    $dataConfig = app(DataConfig::class);
+    $dataClass = $dataConfig->getDataClass($testData::class);
+    $property = $dataClass->properties->first(fn($p) => $p->name === 'email');
+
+    $context = new ParameterContext('email', $property);
+    $context->description = 'Must be a string.';
+    $context->type = 'string';
+
+    $result = $this->stage->process($context);
+
+    expect($result->description)->toBe('Must be a string. The user\'s email. Must be a valid email address.');
+});
+
+it('combines repeated and variadic custom descriptions in declaration order', function () {
+    $testData = new class ('test') extends Data {
+        public function __construct(
+            #[Description('First sentence.', 'Second sentence.')]
+            #[Description('Third sentence.')]
+            public string $name,
+        ) {}
+    };
+
+    $dataConfig = app(DataConfig::class);
+    $dataClass = $dataConfig->getDataClass($testData::class);
+    $property = $dataClass->properties->first(fn($p) => $p->name === 'name');
+
+    $context = new ParameterContext('name', $property);
+    $context->description = 'Must be a string.';
+    $context->type = 'string';
+
+    $result = $this->stage->process($context);
+
+    expect($result->description)->toBe('Must be a string. First sentence. Second sentence. Third sentence.');
 });

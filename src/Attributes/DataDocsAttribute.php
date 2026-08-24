@@ -12,6 +12,6 @@ namespace Abrha\LaravelDataDocs\Attributes;
  *
  * Custom attributes should implement this interface to be included in the
  * documentation extraction process. The package provides several built-in
- * attributes such as Hidden, Example, QueryParameter, and ResponseData.
+ * attributes such as Hidden, Example, Description, QueryParameter, and ResponseData.
  */
 interface DataDocsAttribute {}

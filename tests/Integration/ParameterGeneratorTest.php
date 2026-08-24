@@ -1,8 +1,10 @@
 <?php
 
+use Abrha\LaravelDataDocs\Attributes\Description;
 use Abrha\LaravelDataDocs\Attributes\Hidden;
 use Abrha\LaravelDataDocs\Pipeline\PipelineFactory;
 use Abrha\LaravelDataDocs\Services\ParameterGenerator;
+use Spatie\LaravelData\Attributes\Validation\Email;
 use Spatie\LaravelData\Data;
 use Spatie\LaravelData\Support\DataConfig;
 
@@ -108,6 +110,15 @@ it('sets location to body for all parameters', function () {
         ->and($parameters['age'])->toHaveKey('name');
 });
 
+it('appends custom descriptions after type and before validation', function () {
+    $parameterObjects = ($this->generator)(DescribedFieldsData::class);
+    $parameters = array_map(fn($param) => $param->toArray(), $parameterObjects);
+
+    expect($parameters['email']['description'])->toBe('Must be a string. The user\'s email. Must be a valid email address.')
+        ->and($parameters['id']['description'])->toBe('Must be a string. The unique identifier of the user')
+        ->and($parameters['notes']['description'])->toBe('Must be a string. Line A Line B');
+});
+
 it('handles hidden properties in nested objects', function () {
     $parameters = ($this->generator)(NestedHiddenData::class);
 
@@ -204,5 +215,19 @@ class NestedHiddenData extends Data
 {
     public function __construct(
         public NestedWithHiddenData $nested,
+    ) {}
+}
+
+class DescribedFieldsData extends Data
+{
+    public function __construct(
+        #[Description('The unique identifier of the user')]
+        public string $id,
+        #[Description('The user\'s email.')]
+        #[Email]
+        public string $email,
+        #[Description('Line A')]
+        #[Description('Line B')]
+        public string $notes,
     ) {}
 }
