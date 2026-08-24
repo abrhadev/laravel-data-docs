@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+load_jig_env() {
+    local file="$ROOT/jig.env" line key
+    [ -f "$file" ] || return 0
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%$'\r'}"
+        case "$line" in
+            ''|'#'*) continue ;;
+        esac
+        key="${line%%=*}"
+        key="${key%"${key##*[![:space:]]}"}"
+        key="${key#"${key%%[![:space:]]*}"}"
+        [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+        if [ -z "${!key+x}" ]; then
+            export "${line?}"
+        fi
+    done < "$file"
+}
+
+jig_ssh_enabled() {
+    local value="${JIG_SSH:-}"
+    value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
+
+    case "$value" in
+        1|true|yes) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+if [ -x "$ROOT/vendor/bin/jig" ]; then
+    exec "$ROOT/vendor/bin/jig" "$@"
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+    echo "jig: Docker is not installed or not on PATH." >&2
+    exit 1
+fi
+
+if ! docker_info_err="$(docker info 2>&1 >/dev/null)"; then
+    printf '%s\n' "$docker_info_err" >&2
+    echo "jig: Docker is installed but the daemon is not reachable." >&2
+    exit 1
+fi
+
+load_jig_env
+
+CACHE="${JIG_COMPOSER_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/abrha-jig/composer}"
+mkdir -p "$CACHE"
+
+if jig_ssh_enabled; then
+    if [ -z "${SSH_AUTH_SOCK:-}" ] || [ ! -S "${SSH_AUTH_SOCK}" ]; then
+        if [ -z "${JIG_SSH_DIR:-}" ] || [ ! -d "${JIG_SSH_DIR}" ]; then
+            echo "jig: JIG_SSH is enabled but no SSH agent or JIG_SSH_DIR is available." >&2
+            echo "     Load a key into an agent (ssh-add), or set JIG_SSH_DIR to a directory of keys." >&2
+            exit 1
+        fi
+    fi
+fi
+
+echo "jig: vendor/ not found — installing dependencies with Docker (one time)."
+
+run=(docker run -i --rm
+    -v "$ROOT:/app"
+    -v "$CACHE:/composer/cache"
+    -w /app
+    -e COMPOSER_CACHE_DIR=/composer/cache
+    -e COMPOSER_NO_INTERACTION=1
+    -e "JIG_HOST_OWNER=$(id -u):$(id -g)")
+
+if jig_ssh_enabled; then
+    run+=(-e GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new")
+
+    if [ -n "${SSH_AUTH_SOCK:-}" ] && [ -S "${SSH_AUTH_SOCK}" ]; then
+        run+=(-v "$SSH_AUTH_SOCK:/ssh-agent" -e SSH_AUTH_SOCK=/ssh-agent)
+    elif [ -n "${JIG_SSH_DIR:-}" ] && [ -d "${JIG_SSH_DIR}" ]; then
+        run+=(-v "$JIG_SSH_DIR:/tmp/ssh-host:ro")
+    fi
+fi
+
+status=0
+"${run[@]}" --entrypoint sh composer:2 -s <<'EOS' || status=$?
+set -e
+if [ -d /tmp/ssh-host ]; then
+    mkdir -p /root/.ssh
+    cp -RL /tmp/ssh-host/. /root/.ssh/ 2>/dev/null || true
+    chmod 700 /root/.ssh 2>/dev/null || true
+    find /root/.ssh -type f -exec chmod 600 {} \; 2>/dev/null || true
+fi
+export COMPOSER_HOME=/root/.composer HOME=/root
+printf '[safe]\n\tdirectory = *\n' > /etc/gitconfig
+composer install --no-progress --no-scripts --ignore-platform-reqs
+chown -R "$JIG_HOST_OWNER" /app/vendor
+[ -f /app/composer.lock ] && chown "$JIG_HOST_OWNER" /app/composer.lock
+chown -R "$JIG_HOST_OWNER" /composer/cache 2>/dev/null || true
+EOS
+
+if [ "$status" -ne 0 ]; then
+    docker run --rm -v "$ROOT:/app" --entrypoint sh composer:2 -c "chown -R $(id -u):$(id -g) /app/vendor /app/composer.lock 2>/dev/null || true" || true
+    echo "" >&2
+    echo "jig: bootstrap install failed (exit $status). See Docker/Composer output above." >&2
+    exit "$status"
+fi
+
+if [ ! -x "$ROOT/vendor/bin/jig" ]; then
+    echo "jig: bootstrap install failed — vendor/bin/jig was not created." >&2
+    echo "      Check composer.json repositories and the abrha/jig constraint." >&2
+    exit 1
+fi
+
+touch "$ROOT/vendor/.jig-bootstrap"
+exec "$ROOT/vendor/bin/jig" "$@"

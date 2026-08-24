@@ -31,3 +31,4 @@ testbench.yaml
 /docs
 /coverage
 coverage.txt
+jig.env

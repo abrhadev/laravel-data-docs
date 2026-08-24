@@ -618,44 +618,39 @@ These strategies automatically detect Data classes in your controller methods an
 
 ## Development
 
-This project uses a Docker-based development environment with a long-running container for fast command execution.
+This project uses [abrha/jig](https://github.com/abrhadev/jig), a Docker-based environment for PHP package tooling. Docker Compose v2 is required (Linux or WSL2).
 
-### Getting Started
+On a fresh clone, `./jig` installs Composer dependencies with Docker if `vendor/` is missing, then runs the requested command.
 
-Start the development container (do this once):
-
-```bash
-./dev up
-```
-
-The container stays running in the background. All subsequent commands execute instantly without container startup overhead.
+Optional local overrides: copy `jig.env.example` to `jig.env` (do not commit `jig.env`).
 
 ### Available Commands
 
 ```bash
-./dev pest                             # Run all tests
-./dev pest tests/Unit/SomeTest.php     # Run specific test
-./dev pint                             # Format all files
-./dev pint src/                        # Format specific directory
-./dev composer require package/name    # Install packages
-./dev shell                            # Interactive shell
-./dev down                             # Stop container when done
+./jig pest                             # Run all tests
+./jig pest tests/Unit/SomeTest.php     # Run specific test
+./jig pint                             # Format all files
+./jig pint src/                        # Format specific directory
+./jig composer require package/name    # Install packages
+./jig shell                            # Interactive shell
+./jig coverage                         # Run tests with coverage
+./jig quality                          # Style, analysis, and tests
 ```
 
-Run `./dev help` to see all available commands.
+Run `./jig help` to see all available commands, or `./jig doctor` to diagnose the local setup.
 
 ## Testing
 
 Run all tests:
 
 ```bash
-./dev pest
+./jig pest
 ```
 
 Run tests with coverage:
 
 ```bash
-./dev coverage
+./jig coverage
 ```
 
 Or using composer:

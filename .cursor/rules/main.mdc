@@ -6,7 +6,7 @@ alwaysApply: true
 
 ## Code Style & Quality
 - Never create explanatory comments in code - code must be self-documenting through clear naming and structure
-- Always run ./dev pint on any edited PHP files before completing a task
+- Always run ./jig pint on any edited PHP files before completing a task
 - Maintain minimum 80% method coverage
 - Follow existing naming patterns in the codebase
 
@@ -19,8 +19,8 @@ alwaysApply: true
 - **Separation of Concerns**: Each pipeline stage should handle one specific responsibility
 
 ## Testing Requirements
-- Run tests with './dev pest' (commands are instant with long-running containers)
-- Run tests with coverage: './dev coverage --min-method=80' (or use './dev quality' for stricter checks)
+- Run tests with './jig pest'
+- Run tests with coverage: './jig coverage --min-method=80' (or use './jig quality' for stricter checks)
 - Separate unit tests and integration tests into different directories (tests/Unit/, tests/Integration/)
 - Create one test file per class (e.g., TypeStageTest.php for TypeStage.php)
 - Unit tests must test classes in isolation, not through entry points
@@ -36,28 +36,25 @@ alwaysApply: true
 
 ## Docker Development Environment
 
-### Container Lifecycle
-The project uses a **long-running Docker container** for instant command execution:
-
-1. **Start once:** `./dev up` (starts container in background)
-2. **Run commands instantly:** `./dev pest`, `./dev pint`, etc.
-3. **Stop when done:** `./dev down` (optional - uses minimal resources)
+This project uses [abrha/jig](https://github.com/abrhadev/jig). All development commands run through `./jig`. Docker Compose v2 is required (Linux or WSL2). On a fresh clone, `./jig` installs Composer dependencies if `vendor/` is missing.
 
 ### Command Execution
-- All development commands run through `./dev` wrapper
-- Commands automatically start the container if it's not running
-- Use relative paths for commands: `./dev pest` not `/home/user/path/dev pest`
-- Commands execute via `docker exec` on running container (instant, no startup overhead)
+- All development commands run through `./jig`
+- Use relative paths: `./jig pest` not `/home/user/path/jig pest`
+- Do not use `./dev`, Sail, or host `vendor/bin/*` for package tooling
+- Run `./jig doctor` if the environment looks wrong
 
 ### Key Commands
 ```bash
-./dev up                              # Start container (once per session)
-./dev pest                            # Run all tests (instant)
-./dev pest tests/Unit/SomeTest.php    # Run specific test
-./dev pint src/                       # Format specific directory
-./dev composer require package/name   # Install packages
-./dev shell                           # Interactive shell in container
-./dev down                            # Stop container
+./jig pest                            # Run all tests
+./jig pest tests/Unit/SomeTest.php    # Run specific test
+./jig pint                            # Format all files
+./jig pint src/                       # Format specific directory
+./jig composer require package/name   # Install packages
+./jig coverage --min-method=80        # Tests with coverage
+./jig quality                         # Style, analysis, and tests
+./jig shell                           # Interactive shell
+./jig help                            # All available commands
 ```
 
 ## Workflow & Safety
