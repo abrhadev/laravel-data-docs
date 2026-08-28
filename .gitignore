@@ -32,3 +32,7 @@ testbench.yaml
 /coverage
 coverage.txt
 jig.env
+
+# SPDD
+/spdd/review/
+/.claude/worktrees/

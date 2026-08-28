@@ -21,6 +21,11 @@ jobs:
 
       - name: Fix PHP code style issues
         uses: aglipanci/laravel-pint-action@2.6
+        with:
+          # Keep equal to laravel/pint in composer.json, so CI formats exactly
+          # as `./jig pint` does locally. A different version applies the same
+          # pint.json rules differently and pushes a "Fix styling" commit.
+          pintVersion: 1.30.5
 
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v7
