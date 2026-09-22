@@ -1,8 +1,8 @@
 # Parameter Metadata Pipeline
 
-Core canvas. Owns `src/Pipeline/**` except what two sibling canvases own: requirement resolution (`RequiredStage`) and example generation (`ExampleGenerationStage`). This canvas owns the stage contract and runner, the factory and the default stage order, the shared `ParameterContext`, and the hidden, type, custom-type, attribute-processing, type-description and default-value stages.
+Core canvas. Owns `src/Pipeline/**` except what two sibling canvases own: requirement resolution (`RequiredStage`, `RequirementDescriptionStage`, `Pipeline/Support/**`) and example generation (`ExampleGenerationStage`). This canvas owns the stage contract and runner, the factory and the default stage order, the shared `ParameterContext`, and the hidden, type, custom-type, attribute-processing, type-description and default-value stages.
 
-Related canvases: requirement resolution (required / nullable); example generation (the `example`); documentation records; public attributes; attribute processing framework; custom type extension; DTO parameter extraction; every family canvas that writes a context field.
+Related canvases: requirement resolution (required / nullable and the requirement sentences); example generation (the `example`); documentation records; public attributes; attribute processing framework; custom type extension; DTO parameter extraction; every family canvas that writes a context field.
 
 ## Requirements
 
@@ -12,9 +12,9 @@ Related canvases: requirement resolution (required / nullable); example generati
 - Allow project configuration and registered custom-type processors to override how non-standard class types appear in docs.
 - Fold Spatie Laravel Data validation rules and package documentation attributes into the same parameter record (constraints, extra description fragments, examples, formats).
 - Emit human-readable descriptions that state the type or allowed enum values, then any extra fragments, then a default-value sentence when a default exists.
-- Decide requirement status (requirement resolution canvas), and generate a sample `example` when none was supplied (example generation canvas).
+- Decide requirement status and state it in prose (requirement resolution canvas), and generate a sample `example` when none was supplied (example generation canvas).
 
-Boundaries of this spec: the sequential pipeline, its factory, the shared mutable context, and the default stages other than the two the sibling canvases own. Attribute processor internals, custom-type processor internals, and Parameter value-object serialization beyond `toParameter()` are outside this canvas except as collaborators.
+Boundaries of this spec: the sequential pipeline, its factory, the shared mutable context, and the default stages other than the three the sibling canvases own. Attribute processor internals, custom-type processor internals, and Parameter value-object serialization beyond `toParameter()` are outside this canvas except as collaborators.
 
 ## Entities
 
@@ -44,6 +44,7 @@ classDiagram
         +type string~
         +required bool~
         +nullable bool~
+        +onlyValidatedWhenPresent bool
         +location ParameterLocation~
         +description string
         +example mixed
@@ -75,12 +76,14 @@ classDiagram
     class DefaultValueStage
     class DefaultValueDescriptionStage
     class RequiredStage
+    class RequirementDescriptionStage
     class ExampleGenerationStage
 
     ParameterPipeline --> ParameterPipelineStage : owns ordered stages
     ParameterPipeline ..> ParameterContext : processes
     PipelineFactory ..> ParameterPipeline : builds default
     PipelineFactory ..> CustomTypeConfig : from custom_types config
+    PipelineFactory ..> RequirementResolver : fromConfig()
     HiddenStage ..|> ParameterPipelineStage
     TypeStage ..|> ParameterPipelineStage
     CustomTypeStage ..|> ParameterPipelineStage
@@ -89,6 +92,7 @@ classDiagram
     DefaultValueStage ..|> ParameterPipelineStage
     DefaultValueDescriptionStage ..|> ParameterPipelineStage
     RequiredStage ..|> ParameterPipelineStage
+    RequirementDescriptionStage ..|> ParameterPipelineStage
     ExampleGenerationStage ..|> ParameterPipelineStage
     TypeStage ..> EnumInfo : writes
     CustomTypeStage ..> CustomTypeConfig : applies
@@ -108,15 +112,15 @@ Collaborating types used by this module but not owned by it:
 - `EnumInfo` / `EnumType`: enum documentation payload; `toArray()` returns case names for pure enums and backing values for backed enums.
 - `Parameter`: output record. `toParameter()` defaults missing type to `string`, required to `false`, nullable to `true`, location to `BODY`. Null OpenAPI constraint fields are dropped; `0` and other non-null values are kept.
 - `ParameterLocation`: `QUERY` / `BODY`. No pipeline stage assigns `location`.
-- Faker is listed in the example generation canvas.
+- The requirement collaborators (`DataConfig`, `RuleInferrer`, `PropertyRules`, the requirement rule classes, `ValidationContext` / `ValidationPath`) are listed in the requirement resolution canvas; Faker in the example generation canvas.
 
 ## Approach
 
 The module is a linear pipeline: a mutable `ParameterContext` is passed through ordered stages. Each stage implements `ParameterPipelineStage` and returns the same context instance after mutation. The pipeline is a simple list with `addStage` appending; there is no remove, insert-at-index, or named-stage API.
 
-Default order is fixed in `PipelineFactory::createDefault`: Hidden, Type, CustomType, AttributeProcessing, TypeDescription, DefaultValue, DefaultValueDescription, Required, ExampleGeneration.
+Default order is fixed in `PipelineFactory::createDefault`: Hidden, Type, CustomType, AttributeProcessing, TypeDescription, DefaultValue, DefaultValueDescription, Required, RequirementDescription, ExampleGeneration.
 
-Requirement status is computed from the declared type alone: see the requirement resolution canvas. Example generation runs last: see the example generation canvas.
+Requirement status is reconciled, not recomputed: the decisions are recorded in the requirement resolution canvas. Example generation runs last: see the example generation canvas.
 
 Trade-offs present in the code:
 
@@ -137,26 +141,28 @@ Known divergences (codified as-is, not proposed fixes):
 - Default-value description uses `property->defaultValue` for `UnitEnum` display but `context->default` for booleans, arrays, and objects.
 - Scalar type detection walks `bool`, `int`, `float`, `string` and takes the first `acceptsType` hit, so overlapping acceptors follow that priority.
 - AttributeProcessingStage runs before TypeDescriptionStage, so type/enum sentences appear at the front of the final description even when attributes ran first.
-- Stage and pipeline classes carry no explanatory comments beyond those listed in Norms.
+- Stage and pipeline classes carry no explanatory comments beyond those listed in Norms; `RequirementResolver` and `RequiredStage` are the requirement resolution canvas's deliberate exceptions.
 - `STANDARD_TYPES` in CustomTypeStage is a closed list; a type outside it, such as the class name `DateTimeImmutable[]` TypeStage writes for an array of a class, falls through to custom-type handling and, with no config or processor, to the string fallback, so an array of a class is published as `string`.
 
 ## Structure
 
-Namespace `Abrha\LaravelDataDocs\Pipeline`. Stages live in `Pipeline\Stages`. Context lives in `Pipeline\Context`.
+Namespace `Abrha\LaravelDataDocs\Pipeline`. Stages live in `Pipeline\Stages`. Context lives in `Pipeline\Context`. The requirement seam and its value object live in `Pipeline\Support`.
 
 Dependency direction (leaf toward orchestrator):
 
 1. `ParameterPipelineStage` (contract).
-2. Stage classes (depend on context + collaborators).
-3. `ParameterPipeline` (depends on stage contract and context).
-4. `PipelineFactory` (depends on pipeline, all default stages, `CustomTypeConfig`, Faker factory).
+2. `RequirementStatus` and `RequirementResolver` (requirement resolution canvas).
+3. Stage classes (depend on context + collaborators; `RequiredStage` additionally requires `RequirementResolver`).
+4. `ParameterPipeline` (depends on stage contract and context).
+5. `PipelineFactory` (depends on pipeline, all default stages, `CustomTypeConfig`, `RequirementResolver`, Faker factory).
 
+`RequirementResolver` is the only class permitted to import Spatie's validation internals (`PropertyRules`, `RequiringRule`, `ValidationContext`, `ValidationPath`); the rule and its scope are in the requirement resolution canvas.
 
 Call graph for a default run:
 
-`PipelineFactory::createDefault` → `ParameterPipeline::addStage` (nine times) → caller `ParameterPipeline::process` → each `stage->process` until hidden or exhausted → optional later `ParameterContext::toParameter`.
+`PipelineFactory::createDefault` → `RequirementResolver::fromConfig` → `ParameterPipeline::addStage` (ten times) → caller `ParameterPipeline::process` → each `stage->process` until hidden or exhausted → optional later `ParameterContext::toParameter`.
 
-There is no inheritance among stages. All stage classes are `final`. `PipelineFactory` is a static factory, not a pipeline stage.
+There is no inheritance among stages. All stage classes are `final`, as are `RequirementResolver` and `RequirementStatus`. `PipelineFactory` is a static factory, not a pipeline stage.
 
 Layering: this is a domain processing layer. It does not own HTTP, OpenAPI document assembly, or Laravel container binding (those sit outside this canvas).
 
@@ -179,14 +185,16 @@ Layering: this is a domain processing layer. It does not own HTTP, OpenAPI docum
 - Static method `createDefault(array $dataDocsConfig = [])`:
   - Reads `$dataDocsConfig['custom_types']` or an empty array.
   - For each entry, keys are class names and values are arrays passed to `CustomTypeConfig::fromArray` (requires `type` and `descriptions`).
-  - Instantiates `ParameterPipeline` and adds stages in this order: HiddenStage (no deps), TypeStage (no deps), CustomTypeStage with the config map, AttributeProcessingStage (no deps), TypeDescriptionStage, DefaultValueStage, DefaultValueDescriptionStage, RequiredStage (no deps), ExampleGenerationStage with `Faker\Factory::create()`.
+  - Instantiates `ParameterPipeline` and adds stages in this order: HiddenStage (no deps), TypeStage (no deps), CustomTypeStage with the config map, AttributeProcessingStage (no deps), TypeDescriptionStage, DefaultValueStage, DefaultValueDescriptionStage, RequiredStage with `RequirementResolver::fromConfig()`, RequirementDescriptionStage (no deps), ExampleGenerationStage with `Faker\Factory::create()`.
+  - `RequirementResolver::fromConfig()` is evaluated once per `createDefault` call, so the inferrer list is read once and reused across every property.
   - Returns the pipeline. Does not process any property.
 
 ### ParameterContext
 
 - Responsibility: accumulate documentation fields for one named property.
 - Constructor takes readonly `name` (string) and readonly `property` (`DataProperty`).
-- Defaults: `isHidden` false, nested/array flags false, `type`/`required`/`nullable`/`location`/`enumInfo`/`dataClass`/`format`/`pattern` and numeric constraints null, `description` empty string, `example` null, `default` null, `descriptions` empty array.
+- Defaults: `isHidden` false, nested/array flags false, `onlyValidatedWhenPresent` false, `type`/`required`/`nullable`/`location`/`enumInfo`/`dataClass`/`format`/`pattern` and numeric constraints null, `description` empty string, `example` null, `default` null, `descriptions` empty array.
+- `onlyValidatedWhenPresent` is a non-nullable bool (unlike `required`/`nullable`, which are nullable). It drives description text only and is deliberately absent from `toParameter()`, so it reaches neither `Parameter` nor `openApiAttributes`.
 - `enumInfo` is written only by `TypeStage`.
 - Method `toParameter()` builds `Parameter` with defaults listed under Entities. `enumValues` is `enumInfo?->toArray()`. `openApiAttributes` includes default, format, min/max, exclusive min/max, pattern, length and items bounds, multipleOf, with nulls removed via `array_filter` using `!== null`.
 
@@ -246,19 +254,20 @@ Layering: this is a domain processing layer. It does not own HTTP, OpenAPI docum
 - Description text uses: `UnitEnum` from `property->defaultValue` → `name`; boolean `context->default` → `true`/`false` strings; array or object `context->default` → `json_encode`; otherwise the `context->default` value interpolated into `"Defaults to <code>{value}</code>."`
 - Append via `trim(existing + space + new)`.
 
-`RequiredStage` is specified in the requirement resolution canvas; `ExampleGenerationStage` in the example generation canvas.
+`RequiredStage`, `RequirementDescriptionStage`, `RequirementResolver` and `RequirementStatus` are specified in the requirement resolution canvas; `ExampleGenerationStage` in the example generation canvas.
 
 ## Norms
 
 - PHP, PSR-4 namespace `Abrha\LaravelDataDocs\...`, `final` classes, interface for stages only.
-- No explanatory comments in stage/pipeline classes. In this canvas's classes, CustomTypeStage has a single `@param array<string, CustomTypeConfig>` docblock on the constructor.
+- No explanatory comments in stage/pipeline classes, with deliberate exceptions: `RequirementResolver` and `RequiredStage` (requirement resolution canvas). In this canvas's classes, CustomTypeStage has a single `@param array<string, CustomTypeConfig>` docblock on the constructor.
 - Mutable public properties on context; stages do not clone the context.
 - Fluent `addStage` on the pipeline; factory uses chained `addStage`.
-- Singleton `getInstance()` for AttributeProcessorRegistry and CustomTypeProcessorRegistry; stages do not receive those as constructor arguments.
+- Singleton `getInstance()` for AttributeProcessorRegistry and CustomTypeProcessorRegistry; stages do not receive those as constructor arguments. (`RequirementResolver` is constructor-injected into `RequiredStage`: requirement resolution canvas.)
 - Optional processor calls use nullsafe `?->process`.
 - Documentation strings use HTML `<code>` for enum cases and default values.
 - Type maps and description maps are private class constants, not config.
 - Tests (outside this source folder but mirroring it): Pest, one test file per class under `tests/Unit/Pipeline/`, including `PipelineFactoryTest` and `ParameterContextTest`. Stages are unit-tested in isolation, not only through `ParameterPipeline`.
+- `PipelineFactoryTest` asserts the exact ten-class stage order by reflection, because ordering is observable behaviour rather than an implementation detail.
 - Naming: `*Stage` for stages, `process` as the stage method, `isHidden` / `has*` boolean flags, OpenAPI-ish constraint field names (`minLength`, `exclusiveMinimum`, `multipleOf`).
 - Error handling is mostly absent: no thrown domain exceptions in this module. TypeStage catches `TypeError` with an empty handler.
 
@@ -291,5 +300,5 @@ Security:
 Business / ordering:
 
 - Default factory stage order is part of observable behavior (description prepend/append and example constraints depend on it).
-- Required/nullable are computed after descriptions and defaults are written, but they do not currently feed description text.
+- Required/nullable are computed after descriptions and defaults are written, and they now do feed description text: RequirementDescriptionStage runs immediately after RequiredStage and appends its sentence last, after the type sentence, attribute fragments, and default sentence. Moving RequiredStage earlier than AttributeProcessingStage would reintroduce the overwrite defect; moving RequirementDescriptionStage away from its position changes observable sentence order.
 - Custom type config overwrites constraint fields including with null, which can clear values previously set (none are set before this stage in the default order except type/enum from TypeStage).

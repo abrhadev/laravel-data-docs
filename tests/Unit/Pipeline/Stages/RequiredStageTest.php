@@ -2,13 +2,14 @@
 
 use Abrha\LaravelDataDocs\Pipeline\Context\ParameterContext;
 use Abrha\LaravelDataDocs\Pipeline\Stages\RequiredStage;
+use Abrha\LaravelDataDocs\Pipeline\Support\RequirementResolver;
 use Spatie\LaravelData\Data;
 use Spatie\LaravelData\Optional;
 use Spatie\LaravelData\Support\DataConfig;
 
 beforeEach(function () {
     $this->dataConfig = app(DataConfig::class);
-    $this->stage = new RequiredStage();
+    $this->stage = new RequiredStage(RequirementResolver::fromConfig());
 });
 
 it('sets required to true when not nullable, not optional, and no default', function () {
@@ -78,7 +79,9 @@ it('sets required to false when nullable and optional', function () {
     $context = new ParameterContext($property->name, $property);
     $result = $this->stage->process($context);
 
-    expect($result->required)->toBeFalse();
+    expect($result->required)->toBeFalse()
+        ->and($result->nullable)->toBeTrue()
+        ->and($result->onlyValidatedWhenPresent)->toBeTrue();
 });
 
 it('sets required to false when nullable, optional, and has default', function () {
@@ -88,7 +91,9 @@ it('sets required to false when nullable, optional, and has default', function (
     $context = new ParameterContext($property->name, $property);
     $result = $this->stage->process($context);
 
-    expect($result->required)->toBeFalse();
+    expect($result->required)->toBeFalse()
+        ->and($result->nullable)->toBeTrue()
+        ->and($result->onlyValidatedWhenPresent)->toBeTrue();
 });
 
 it('sets nullable to false when property type is not nullable', function () {
@@ -208,16 +213,45 @@ it('only modifies required and nullable properties without affecting others', fu
         ->and($result->nullable)->not->toBeNull();
 });
 
+it('falls back to the type-derived computation when the resolver cannot reconcile', function (
+    string $property,
+    bool $required,
+    bool $nullable,
+    bool $onlyValidatedWhenPresent,
+) {
+    // An empty inferrer list is the resolver's "cannot reconcile" signal, so this
+    // is the only way to reach applyTypeDerivedFallback under tests/TestCase.
+    $stage = new RequiredStage(new RequirementResolver([]));
+
+    $dataClass = $this->dataConfig->getDataClass(RequiredTestData::class);
+    $dataProperty = $dataClass->properties->first(fn($p) => $p->name === $property);
+
+    $result = $stage->process(new ParameterContext($dataProperty->name, $dataProperty));
+
+    expect($result->required)->toBe($required)
+        ->and($result->nullable)->toBe($nullable)
+        ->and($result->onlyValidatedWhenPresent)->toBe($onlyValidatedWhenPresent);
+})->with([
+    // [property, required, nullable, onlyValidatedWhenPresent]
+    'plain type'                    => ['fullyRequired', true, false, false],
+    'nullable type'                 => ['onlyNullable', false, true, false],
+    'Optional type'                 => ['onlyOptional', false, false, true],
+    'has default'                   => ['onlyDefault', false, false, false],
+    'nullable + default'            => ['nullableWithDefault', false, true, false],
+    'nullable + Optional'           => ['nullableAndOptional', false, true, true],
+    'nullable + Optional + default' => ['allThree', false, true, true],
+]);
+
 class RequiredTestData extends Data
 {
     public function __construct(
         public string $fullyRequired,
         public ?string $onlyNullable,
         public string|Optional $onlyOptional,
+        public string|Optional|null $nullableAndOptional,
         public string $onlyDefault = 'default',
         public ?string $nullableWithDefault = null,
         public string|Optional $optionalWithDefault = 'default',
-        public ?string $nullableAndOptional = null,
-        public ?string $allThree = 'default',
+        public string|Optional|null $allThree = 'default',
     ) {}
 }

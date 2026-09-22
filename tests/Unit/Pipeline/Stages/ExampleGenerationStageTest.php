@@ -62,9 +62,19 @@ it('generates example from enum values', function () {
         cases: [ExampleTestEnum::ACTIVE, ExampleTestEnum::INACTIVE]
     );
 
-    $result = $this->stage->process($context);
+    // Faker's pick depends on the global RNG and its own algorithm, so assert the
+    // contract, not one value: the example is a case value, stable for a seed.
+    $examples = [];
 
-    expect($result->example)->toBe('inactive');
+    foreach ([1, 2] as $run) {
+        $faker = \Faker\Factory::create();
+        $faker->seed(1234);
+        $context->example = null;
+        $examples[] = (new ExampleGenerationStage($faker))->process($context)->example;
+    }
+
+    expect($examples[0])->toBeIn(['active', 'inactive'])
+        ->and($examples[1])->toBe($examples[0]);
 });
 
 it('generates array of unique enum values for enum array type', function () {

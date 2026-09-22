@@ -4,13 +4,44 @@ namespace Abrha\LaravelDataDocs\Pipeline\Stages;
 
 use Abrha\LaravelDataDocs\Pipeline\Context\ParameterContext;
 use Abrha\LaravelDataDocs\Pipeline\ParameterPipelineStage;
+use Abrha\LaravelDataDocs\Pipeline\Support\RequirementResolver;
 
+/**
+ * Sole authority on required, nullable and onlyValidatedWhenPresent. Assigns
+ * unconditionally, so anything an earlier stage wrote to those fields is
+ * replaced; no attribute processor should be registered for Required, Nullable
+ * or Sometimes.
+ */
 final class RequiredStage implements ParameterPipelineStage
 {
+    public function __construct(
+        private readonly RequirementResolver $resolver,
+    ) {}
+
     public function process(ParameterContext $context): ParameterContext
     {
-        $context->nullable = $context->property->type->isNullable;
-        $context->required = !$context->property->type->isNullable && !$context->property->type->isOptional && !$context->property->hasDefaultValue;
+        $status = $this->resolver->resolve($context->property);
+
+        if ($status === null) {
+            return $this->applyTypeDerivedFallback($context);
+        }
+
+        $context->required = $status->required;
+        $context->nullable = $status->nullable;
+        $context->onlyValidatedWhenPresent = $status->onlyValidatedWhenPresent;
+
+        return $context;
+    }
+
+    private function applyTypeDerivedFallback(ParameterContext $context): ParameterContext
+    {
+        $type = $context->property->type;
+
+        $context->nullable = $type->isNullable;
+        $context->required = !$type->isNullable
+            && !$type->isOptional
+            && !$context->property->hasDefaultValue;
+        $context->onlyValidatedWhenPresent = $type->isOptional;
 
         return $context;
     }

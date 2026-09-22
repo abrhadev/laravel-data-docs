@@ -21,6 +21,8 @@ final class ParameterContext
 
     public ?bool $nullable = null;
 
+    public bool $onlyValidatedWhenPresent = false;
+
     public ?ParameterLocation $location = null;
 
     public string $description = '';

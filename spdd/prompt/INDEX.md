@@ -6,7 +6,7 @@ Every source file, and every row of the attribute processor registry's default t
 
 Canvases come in two kinds:
 
-- **Core canvases** own a layer and specify its contracts: types, call shapes, ordering, invariants and extension points. A core canvas never specifies a processor or a registry row. It names no validation attribute: its code reaches attributes only through the registry, and requirement status is derived from the property type. It changes only when a contract changes.
+- **Core canvases** own a layer and specify its contracts: types, call shapes, ordering, invariants and extension points. A core canvas never specifies a processor or a registry row. It names validation attributes only where its own code does: `RequirementResolver`'s rule sets and `RequirementDescriptionStage`'s sentences decide requirement status for whole groups of attributes, and belong to the requirement resolution canvas. It changes only when a contract changes.
 - **Family canvases** own one family of validation attributes: its processors, its family-private base class, and its registry rows. A family canvas is the lasting owner of its user story. It is never folded away or deleted.
 
 ## Core canvases
@@ -14,7 +14,7 @@ Canvases come in two kinds:
 | Canvas | File | Owns |
 | --- | --- | --- |
 | Parameter metadata pipeline | `LDD-202608281600-[Canvas]-pipeline-parameter-metadata.md` | `src/Pipeline/**` except the two rows below: the stage contract and runner, `PipelineFactory` and the default stage order, `ParameterContext`, and the hidden, type, custom-type, attribute-processing, type-description and default-value stages |
-| Requirement resolution | `LDD-202609260836-[Canvas]-pipeline-requirement-resolution.md` | `Pipeline/Stages/RequiredStage.php`: requirement status (`required`, `nullable`) derived from the property type |
+| Requirement resolution | `LDD-202609260836-[Canvas]-pipeline-requirement-resolution.md` | `Pipeline/Stages/RequiredStage.php`, `Pipeline/Stages/RequirementDescriptionStage.php`, `Pipeline/Support/**` (the requirement seam: `RequirementResolver`, `RequirementStatus`), and the `Required`, `Nullable` and `Sometimes` handling |
 | Example generation | `LDD-202609260836-[Canvas]-pipeline-example-generation.md` | `Pipeline/Stages/ExampleGenerationStage.php` |
 | Documentation records | `LDD-202608281600-[Canvas]-vo-documentation-records.md` | `src/ValueObjects/**` |
 | Public attributes | `LDD-202608281600-[Canvas]-api-public-attributes.md` | `src/Attributes/**`; `DescriptionProcessor`, `ExampleProcessor`, `QueryParameterProcessor`; registry rows `Description`, `Example`, `QueryParameter` |

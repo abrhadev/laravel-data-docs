@@ -9,8 +9,10 @@ use Abrha\LaravelDataDocs\Pipeline\Stages\DefaultValueStage;
 use Abrha\LaravelDataDocs\Pipeline\Stages\ExampleGenerationStage;
 use Abrha\LaravelDataDocs\Pipeline\Stages\HiddenStage;
 use Abrha\LaravelDataDocs\Pipeline\Stages\RequiredStage;
+use Abrha\LaravelDataDocs\Pipeline\Stages\RequirementDescriptionStage;
 use Abrha\LaravelDataDocs\Pipeline\Stages\TypeDescriptionStage;
 use Abrha\LaravelDataDocs\Pipeline\Stages\TypeStage;
+use Abrha\LaravelDataDocs\Pipeline\Support\RequirementResolver;
 use Abrha\LaravelDataDocs\ValueObjects\CustomTypeConfig;
 use Faker\Factory as FakerFactory;
 
@@ -33,7 +35,8 @@ final class PipelineFactory
             ->addStage(new TypeDescriptionStage())
             ->addStage(new DefaultValueStage())
             ->addStage(new DefaultValueDescriptionStage())
-            ->addStage(new RequiredStage())
+            ->addStage(new RequiredStage(RequirementResolver::fromConfig()))
+            ->addStage(new RequirementDescriptionStage())
             ->addStage(new ExampleGenerationStage(FakerFactory::create()));
     }
 }

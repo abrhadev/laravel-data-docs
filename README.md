@@ -624,6 +624,7 @@ The package uses a pipeline pattern to process each property in your Data classe
    - `DefaultValueStage`: Extracts default values
    - `DefaultValueDescriptionStage`: Generates default value descriptions
    - `RequiredStage`: Determines if field is required
+   - `RequirementDescriptionStage`: Adds the presence sentences
    - `ExampleGenerationStage`: Generates example values using Faker
 3. **Parameter Generation**: Context is converted to API parameter format
 4. **OpenAPI Enhancement**: The ExtendedOpenApiGenerator merges additional OpenAPI schema information into the final specification
