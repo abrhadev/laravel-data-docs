@@ -47,6 +47,7 @@ classDiagram
         +onlyValidatedWhenPresent bool
         +presentAcceptsEmpty bool
         +neverSatisfiable bool
+        +confirmationCompanion ConfirmationCompanion~
         +location ParameterLocation~
         +description string
         +example mixed
@@ -100,6 +101,7 @@ classDiagram
     CustomTypeStage ..> CustomTypeConfig : applies
     ParameterContext ..> EnumInfo : optional
     ParameterContext ..> ParameterLocation : unused by stages
+    ParameterContext ..> ConfirmationCompanion : carries, never publishes
     ParameterContext ..> Parameter : materializes
 ```
 
@@ -114,6 +116,7 @@ Collaborating types used by this module but not owned by it:
 - `EnumInfo` / `EnumType`: enum documentation payload; `toArray()` returns case names for pure enums and backing values for backed enums.
 - `Parameter`: output record. `toParameter()` defaults missing type to `string`, required to `false`, nullable to `true`, location to `BODY`. Null OpenAPI constraint fields are dropped; `0` and other non-null values are kept.
 - `ParameterLocation`: `QUERY` / `BODY`. No pipeline stage assigns `location`.
+- `ConfirmationCompanion`: readonly record of a `#[Confirmed]` companion's name and two sentences. Written onto the context only by `ConfirmedProcessor` (cross-field and acceptance canvas) and read only by `ParameterGenerator` (DTO extraction canvas). No stage reads or writes it.
 - The requirement collaborators (`DataConfig`, `RuleInferrer`, `PropertyRules`, the requirement rule classes, `ValidationContext` / `ValidationPath`) are listed in the requirement resolution canvas; Faker in the example generation canvas.
 
 ## Approach
@@ -137,6 +140,7 @@ Known divergences (codified as-is, not proposed fixes):
 
 - Workspace guidance prefers readonly/immutable metadata objects; `ParameterContext` is a bag of public writable fields. `name` and `property` are the only readonly constructor properties.
 - `location`, `hasNestedParameters`, and `hasArrayParameters` are written or defaulted but never consumed by later stages in this module.
+- `confirmationCompanion` is carried through the pipeline untouched: written by an attribute processor, consumed only outside this module by `ParameterGenerator`.
 - TypeStage can produce type `[]` (empty item type plus suffix). CustomTypeStage treats `[]` as a standard type and does not fall through to custom-type handling.
 - `TypeStage::setEnumInfo` swallows `TypeError` and leaves type/enumInfo unchanged for that path.
 - `DefaultValueDescriptionStage` skips when `context->default !== null` is false, so a documented default of PHP `null` never gets a “Defaults to” sentence even if `hasDefaultValue` is true.
@@ -195,8 +199,9 @@ Layering: this is a domain processing layer. It does not own HTTP, OpenAPI docum
 
 - Responsibility: accumulate documentation fields for one named property.
 - Constructor takes readonly `name` (string) and readonly `property` (`DataProperty`).
-- Defaults: `isHidden` false, nested/array flags false, `onlyValidatedWhenPresent` false, `presentAcceptsEmpty` false, `neverSatisfiable` false, `type`/`required`/`nullable`/`location`/`enumInfo`/`dataClass`/`format`/`pattern` and numeric constraints null, `description` empty string, `example` null, `default` null, `descriptions` empty array.
+- Defaults: `isHidden` false, nested/array flags false, `onlyValidatedWhenPresent` false, `presentAcceptsEmpty` false, `neverSatisfiable` false, `confirmationCompanion` null, `type`/`required`/`nullable`/`location`/`enumInfo`/`dataClass`/`format`/`pattern` and numeric constraints null, `description` empty string, `example` null, `default` null, `descriptions` empty array.
 - `onlyValidatedWhenPresent`, `presentAcceptsEmpty` and `neverSatisfiable` are non-nullable bools (unlike `required`/`nullable`, which are nullable). They drive description text only and are deliberately absent from `toParameter()`, so they reach neither `Parameter` nor `openApiAttributes`.
+- `confirmationCompanion` is a `?ConfirmationCompanion`, declared after `neverSatisfiable`. It is carried, never published: written only by `ConfirmedProcessor`, read only by `ParameterGenerator`, and absent from `toParameter()` like the three flags above.
 - `enumInfo` is written only by `TypeStage`.
 - Method `toParameter()` builds `Parameter` with defaults listed under Entities. `enumValues` is `enumInfo?->toArray()`. `openApiAttributes` includes default, format, min/max, exclusive min/max, pattern, length and items bounds, multipleOf, with nulls removed via `array_filter` using `!== null`.
 
@@ -289,6 +294,7 @@ Data / format:
 - Enum backed-type detection uses `ReflectionEnum::getBackingType()?->getName()`; missing backing type name skips enumInfo assignment for that backed branch.
 - OpenAPI constraint fields on Parameter omit nulls only.
 - Description combination drops empty fragments then joins with spaces.
+- `confirmationCompanion` must not surface in `Parameter` or `openApiAttributes`. `ParameterContextTest` pins that it defaults to null and is absent from `toParameter()`.
 
 Performance / integration:
 

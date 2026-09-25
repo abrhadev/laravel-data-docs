@@ -10,6 +10,10 @@ it('returns singleton instance', function () {
     expect($instance1)->toBe($instance2);
 });
 
+it('refuses to be unserialized', function () {
+    RequestDTOFinder::getInstance()->__wakeup();
+})->throws(Exception::class, 'Cannot unserialize singleton');
+
 it('finds data class from method parameters', function () {
     $method = new ReflectionMethod(RequestDTOFinderTestController::class, 'store');
     $finder = RequestDTOFinder::getInstance();

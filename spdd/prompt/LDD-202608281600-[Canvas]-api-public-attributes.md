@@ -122,4 +122,4 @@ Package attributes are read via public properties, not `parameters()`. Registere
 - Example allows any PHP value including null; null is indistinguishable later from “no example” at ExampleGenerationStage (`example !== null`).
 - An explicit `#[Example]` is published as given: generation applies only to a field with no example (example generation canvas), so an example that breaks the field's own rules is the author's to fix.
 - QueryParameter does not encode HTTP method; GET vs body routing is ParameterFilter’s job.
-- A non-null `#[Example]` value is never overwritten by a validation-attribute processor: `ExampleProcessor` is the only processor that writes `example`.
+- A non-null `#[Example]` value is never overwritten by a validation-attribute processor: `ExampleProcessor` runs first, and any processor that writes `example` does so only when it is null (today the acceptance processors, cross-field and acceptance canvas), so `#[Example(null)]` can be.

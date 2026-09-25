@@ -94,6 +94,10 @@ it('emits the only-validated sentence before the nullable sentence', function ()
     );
 });
 
+it('exposes the nullable sentence for the confirmation companion', function () {
+    expect(RequirementDescriptionStage::NULLABLE_SENTENCE)->toBe('A null value is accepted.');
+});
+
 it('returns the same context instance', function () {
     $context = new ParameterContext('couponCode', $this->property);
 

@@ -12,6 +12,7 @@ use Abrha\LaravelDataDocs\Pipeline\Stages\RequiredStage;
 use Abrha\LaravelDataDocs\Pipeline\Stages\RequirementDescriptionStage;
 use Abrha\LaravelDataDocs\Pipeline\Stages\TypeDescriptionStage;
 use Abrha\LaravelDataDocs\Pipeline\Stages\TypeStage;
+use Abrha\LaravelDataDocs\ValueObjects\CustomTypeConfig;
 
 function pipelineStageClasses(ParameterPipeline $pipeline): array
 {
@@ -50,4 +51,20 @@ it('leaves example generation last so it sees the resolved requirement status', 
     $classes = pipelineStageClasses(PipelineFactory::createDefault());
 
     expect(end($classes))->toBe(ExampleGenerationStage::class);
+});
+
+it('passes configured custom types to the custom type stage', function () {
+    $pipeline = PipelineFactory::createDefault([
+        'custom_types' => [
+            'App\\Money' => ['type' => 'string', 'descriptions' => ['Must be a money amount.']],
+        ],
+    ]);
+
+    $stages = (new ReflectionProperty(ParameterPipeline::class, 'stages'))->getValue($pipeline);
+    $customTypeStage = array_values(array_filter($stages, fn(object $stage) => $stage instanceof CustomTypeStage))[0];
+    $config = (new ReflectionProperty(CustomTypeStage::class, 'customTypesConfig'))->getValue($customTypeStage);
+
+    expect($config)->toHaveKey('App\\Money')
+        ->and($config['App\\Money'])->toBeInstanceOf(CustomTypeConfig::class)
+        ->and($config['App\\Money']->descriptions)->toBe(['Must be a money amount.']);
 });

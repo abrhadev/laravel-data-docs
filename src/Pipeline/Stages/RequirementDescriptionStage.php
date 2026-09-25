@@ -11,7 +11,7 @@ final class RequirementDescriptionStage implements ParameterPipelineStage
 
     private const SENTENCE = 'Only validated when included in the request.';
 
-    private const NULLABLE_SENTENCE = 'A null value is accepted.';
+    public const NULLABLE_SENTENCE = 'A null value is accepted.';
 
     private const NEVER_SATISFIABLE_SENTENCE = 'Note: this field is both required and prohibited, so no request can pass validation.';
 

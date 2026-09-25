@@ -54,7 +54,7 @@ Known divergences:
 - Request strategies return `[]` when no DTO is found; response strategy returns `null` when no attribute or on exception.
 - `GetFromRequestDTOBase` declares return `?array` but successful and missing-DTO paths return arrays, never null.
 - Pipeline is created on every strategy invocation (new Faker, new pipeline), not reused.
-- Response parameters are not filtered by HTTP method or location; every generated Parameter is serialized. The description sentences are the request ones (the pipeline has no response mode), so a nullable response field reads "A null value is accepted.". Parameters are published under the property names, not Laravel Data's mapped input or output names.
+- Response parameters are not filtered by HTTP method or location; every generated Parameter is serialized. The description sentences are the request ones (the pipeline has no response mode), so a nullable response field reads "A null value is accepted.", and a `#[Confirmed]` response field asks for a `{property}_confirmation` value and publishes that confirmation companion as a response field too (DTO extraction canvas). Parameters are published under the property names, not Laravel Data's mapped input or output names.
 - The strategies always build the default pipeline from `config('data-docs', [])`; a custom `ParameterPipelineStage` reaches Scribe output only through a strategy of the application's own. The README's pipeline-stage example only notes that the pipeline must be created elsewhere, "typically in a service provider or strategy".
 - Query/body subclasses only set the protected enum; they add no other behavior.
 - `settings` argument is unused.

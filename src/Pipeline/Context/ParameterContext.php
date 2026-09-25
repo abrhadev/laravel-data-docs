@@ -2,6 +2,7 @@
 
 namespace Abrha\LaravelDataDocs\Pipeline\Context;
 
+use Abrha\LaravelDataDocs\ValueObjects\ConfirmationCompanion;
 use Abrha\LaravelDataDocs\ValueObjects\EnumInfo;
 use Abrha\LaravelDataDocs\ValueObjects\Parameter;
 use Abrha\LaravelDataDocs\ValueObjects\ParameterLocation;
@@ -26,6 +27,8 @@ final class ParameterContext
     public bool $presentAcceptsEmpty = false;
 
     public bool $neverSatisfiable = false;
+
+    public ?ConfirmationCompanion $confirmationCompanion = null;
 
     public ?ParameterLocation $location = null;
 

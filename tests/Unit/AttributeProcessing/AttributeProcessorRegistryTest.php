@@ -14,6 +14,10 @@ it('implements singleton pattern', function () {
     expect($instance1)->toBe($instance2);
 });
 
+it('refuses to be unserialized', function () {
+    AttributeProcessorRegistry::getInstance()->__wakeup();
+})->throws(Exception::class, 'Cannot unserialize singleton');
+
 it('registers and retrieves processors', function () {
     $registry = AttributeProcessorRegistry::getInstance();
 
@@ -76,6 +80,20 @@ it('registers a processor for every prohibition and exclusion attribute', functi
     'ExcludeUnless'    => [Spatie\LaravelData\Attributes\Validation\ExcludeUnless::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\ExcludeUnlessProcessor::class],
     'ExcludeWith'      => [Spatie\LaravelData\Attributes\Validation\ExcludeWith::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\ExcludeWithProcessor::class],
     'ExcludeWithout'   => [Spatie\LaravelData\Attributes\Validation\ExcludeWithout::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\ExcludeWithoutProcessor::class],
+]);
+
+it('registers a processor for every cross-field comparison and acceptance attribute', function (string $attribute, string $processor) {
+    expect(AttributeProcessorRegistry::getInstance()->getProcessorFor($attribute))
+        ->toBeInstanceOf($processor);
+})->with([
+    'Same'       => [Spatie\LaravelData\Attributes\Validation\Same::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\SameProcessor::class],
+    'Different'  => [Spatie\LaravelData\Attributes\Validation\Different::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\DifferentProcessor::class],
+    'InArray'    => [Spatie\LaravelData\Attributes\Validation\InArray::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\InArrayProcessor::class],
+    'Confirmed'  => [Spatie\LaravelData\Attributes\Validation\Confirmed::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\ConfirmedProcessor::class],
+    'Accepted'   => [Spatie\LaravelData\Attributes\Validation\Accepted::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\AcceptedProcessor::class],
+    'AcceptedIf' => [Spatie\LaravelData\Attributes\Validation\AcceptedIf::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\AcceptedIfProcessor::class],
+    'Declined'   => [Spatie\LaravelData\Attributes\Validation\Declined::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\DeclinedProcessor::class],
+    'DeclinedIf' => [Spatie\LaravelData\Attributes\Validation\DeclinedIf::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\DeclinedIfProcessor::class],
 ]);
 
 it('registers a description-only processor for Filled', function () {

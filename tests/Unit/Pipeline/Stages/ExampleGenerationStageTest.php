@@ -592,6 +592,80 @@ it('respects maxItems constraint for arrays', function () {
     expect(count($result->example))->toBeLessThanOrEqual(1);
 });
 
+it('falls back to a basic string for unknown formats', function () {
+    $dataClass = $this->dataConfig->getDataClass(ExampleTestStringData::class);
+    $property = $dataClass->properties->first();
+
+    $context = new ParameterContext($property->name, $property);
+    $context->type = 'string';
+    $context->format = 'json';
+    $context->maxLength = 5;
+
+    $result = $this->stage->process($context);
+
+    expect($result->example)->toBeString()
+        ->and(strlen($result->example))->toBeLessThanOrEqual(5);
+});
+
+it('clamps minLength to maxLength when they conflict', function () {
+    $dataClass = $this->dataConfig->getDataClass(ExampleTestStringData::class);
+    $property = $dataClass->properties->first();
+
+    $context = new ParameterContext($property->name, $property);
+    $context->type = 'string';
+    $context->minLength = 8;
+    $context->maxLength = 4;
+
+    $result = $this->stage->process($context);
+
+    expect($result->example)->toBeString()
+        ->and(strlen($result->example))->toBe(4);
+});
+
+it('leaves example null for unsupported types', function () {
+    $dataClass = $this->dataConfig->getDataClass(ExampleTestStringData::class);
+    $property = $dataClass->properties->first();
+
+    $context = new ParameterContext($property->name, $property);
+    $context->type = 'SomeCustomClass';
+
+    $result = $this->stage->process($context);
+
+    expect($result->example)->toBeNull();
+});
+
+it('widens the range when minimum exceeds maximum', function () {
+    $dataClass = $this->dataConfig->getDataClass(ExampleTestIntData::class);
+    $property = $dataClass->properties->first();
+
+    $context = new ParameterContext($property->name, $property);
+    $context->type = 'integer';
+    $context->minimum = 50;
+    $context->maximum = 10;
+
+    $result = $this->stage->process($context);
+
+    expect($result->example)->toBeInt()
+        ->toBeGreaterThanOrEqual(50)
+        ->toBeLessThanOrEqual(150);
+});
+
+it('respects both min and max constraints for numbers', function () {
+    $dataClass = $this->dataConfig->getDataClass(ExampleTestFloatData::class);
+    $property = $dataClass->properties->first();
+
+    $context = new ParameterContext($property->name, $property);
+    $context->type = 'number';
+    $context->minimum = 2;
+    $context->maximum = 3;
+
+    $result = $this->stage->process($context);
+
+    expect($result->example)->toBeFloat()
+        ->toBeGreaterThanOrEqual(2)
+        ->toBeLessThanOrEqual(3);
+});
+
 class ExampleTestStringData extends Data
 {
     public function __construct(

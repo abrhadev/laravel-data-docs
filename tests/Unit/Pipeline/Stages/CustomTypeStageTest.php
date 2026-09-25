@@ -244,6 +244,18 @@ it('config takes precedence over processor', function () {
         ->and($result->descriptions)->toBe(['From config']);
 });
 
+it('skips context without a resolved type', function () {
+    $stage = new CustomTypeStage();
+    $dataClass = $this->dataConfig->getDataClass(CustomTypeTestStringData::class);
+    $property = $dataClass->properties->first();
+
+    $context = new ParameterContext($property->name, $property);
+    $result = $stage->process($context);
+
+    expect($result->type)->toBeNull()
+        ->and($result->descriptions)->toBe([]);
+});
+
 class CustomTypeTestStringData extends Data
 {
     public function __construct(public string $test) {}

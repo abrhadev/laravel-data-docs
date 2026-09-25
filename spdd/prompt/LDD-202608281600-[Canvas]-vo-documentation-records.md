@@ -2,7 +2,7 @@
 
 Core canvas. Owns `src/ValueObjects/**`.
 
-Related canvases: pipeline canvases (fills most fields via `ParameterContext::toParameter`); public attributes (`QueryParameterProcessor` sets location before materialization); DTO extraction and Scribe strategies (filter and serialize `Parameter`).
+Related canvases: pipeline canvases (fills most fields via `ParameterContext::toParameter`); public attributes (`QueryParameterProcessor` sets location before materialization); cross-field and acceptance (`ConfirmedProcessor` produces `ConfirmationCompanion`); DTO extraction and Scribe strategies (filter and serialize `Parameter`).
 
 ## Requirements
 
@@ -12,6 +12,7 @@ Related canvases: pipeline canvases (fills most fields via `ParameterContext::to
 - Describe enums for both documentation text (elsewhere) and example/enum lists via a typed case list, and carry a field's documented allowed-value list as `enumValues`: the enum's case names or backing values.
 - Represent project custom-type config as a readonly constraint bag constructed from a PHP array.
 - Label whether a Scribe strategy is extracting query or body parameters.
+- Carry what the attribute layer knows about a `#[Confirmed]` confirmation companion to the parameter generator.
 
 ## Entities
 
@@ -74,11 +75,19 @@ classDiagram
         QUERY_PARAMETERS
     }
 
+    class ConfirmationCompanion {
+        +name string
+        +matchSentence string
+        +requiredWhenSentSentence string
+    }
+
     Parameter --> ParameterLocation
     EnumInfo --> EnumType
 ```
 
-All of these types are `final` classes or backed/unit enums under `Abrha\LaravelDataDocs\ValueObjects`. `Parameter` properties are public and writable after construction. The other classes use readonly constructor properties.
+All of these types are `final` classes or backed/unit enums under `Abrha\LaravelDataDocs\ValueObjects`. `Parameter` properties are public and writable after construction. The other classes use readonly constructor properties; `ConfirmationCompanion` is a `final readonly class`.
+
+`ConfirmationCompanion` comes from STORY-001-003 (analysis `spdd/analysis/GGQPA-XXX-202609251435-[Analysis]-cross-field-comparison-acceptance-attributes.md`). `ConfirmedProcessor` (cross-field and acceptance canvas) produces it and stores it on `ParameterContext::$confirmationCompanion`; `ParameterGenerator` (DTO extraction canvas) consumes it to emit the companion `Parameter`. It never reaches `Parameter` or Scribe itself.
 
 ## Approach
 
@@ -86,7 +95,7 @@ Plain PHP records, not a persistence layer. No validation on construct except `C
 
 Known divergences:
 
-- `Parameter` is mutable; `withLocation` returns a new instance and does not mutate the original, so two styles coexist. `withLocation` has no production caller today: `QueryParameterProcessor` sets the location on the context before `toParameter`.
+- `Parameter` is mutable; `withLocation` returns a new instance and does not mutate the original, so two styles coexist. `withLocation` has no production caller today: `QueryParameterProcessor` sets the location on the context before `toParameter`, and the companion copies it through the constructor.
 - `toArray` never emits `location`, `enumValues` when null, or empty `openApiAttributes`.
 - `EnumInfo::toArray` returns names for PURE and backing values for backed enums; it does not include both.
 - `CustomTypeConfig::fromArray` does not default `type` or `descriptions`.
@@ -95,7 +104,7 @@ Known divergences:
 
 ## Structure
 
-Package `src/ValueObjects/`. No internal dependencies among these types except `Parameter` → `ParameterLocation` and `EnumInfo` → `EnumType`. Callers live in pipeline, processors, factory, filter, and Scribe strategies.
+Package `src/ValueObjects/`. No internal dependencies among these types except `Parameter` → `ParameterLocation` and `EnumInfo` → `EnumType`; `ConfirmationCompanion` depends on nothing. Callers live in pipeline, processors, factory, filter, and Scribe strategies.
 
 ## Operations
 
@@ -127,6 +136,11 @@ Package `src/ValueObjects/`. No internal dependencies among these types except `
 ### ExtractionStrategy
 
 - Int-backed: `BODY_PARAMETERS` = 1, `QUERY_PARAMETERS` = 2.
+
+### ConfirmationCompanion
+
+- `final readonly class` with three constructor-promoted string properties: `name` (the companion's bare name, without prefix, e.g. `password_confirmation`), `matchSentence` (e.g. `Must match the value of <b><i>password</i></b>.`) and `requiredWhenSentSentence` (e.g. `Required when <b><i>password</i></b> is sent.`).
+- No methods and no validation. One-line docblock naming its producer (`ConfirmedProcessor`) and consumer (`ParameterGenerator`).
 
 ## Norms
 

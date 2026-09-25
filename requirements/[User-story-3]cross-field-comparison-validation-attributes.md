@@ -39,6 +39,7 @@ Key points:
 - Numeric and date comparisons against another field — date comparisons are covered by STORY-001-005; numeric bound attributes are already supported today.
 - Enumerated value attributes such as `#[In]` and `#[Enum]` — covered by STORY-001-004.
 - Any change to runtime validation behaviour.
+- Making the examples of `#[Same]` and `#[InArray]` fields match their referenced field's example — this needs a pass across all properties and is a follow-up.
 
 ### Acceptance Criteria
 
@@ -56,9 +57,11 @@ Key points:
 
 #### AC3: Membership in another submitted field's values is documented
 
-**Given** a property `primary_tag` annotated `#[InArray('tags')]`
+**Given** a property `primary_tag` annotated `#[InArray('tags.*')]`
 **When** documentation is generated
 **Then** the description of `primary_tag` states that its value must be one of the values submitted in `tags`
+
+> Only the wildcard form `tags.*` checks membership of an array field. A bare `#[InArray('tags')]` is compared against the key `tags` itself and rejects every value when `tags` is an array, so it is documented as it behaves: its value must equal the value of `tags`.
 
 #### AC4: A confirmation rule surfaces the companion field
 
@@ -67,12 +70,14 @@ Key points:
 **Then** the published contract includes a parameter named `password_confirmation` in addition to `password`
 **And** the description of `password` states that a matching `password_confirmation` value must be sent
 
-#### AC5: A confirmation rule with a custom companion field name surfaces that name
+#### AC5: A confirmation rule documents the companion field that is actually enforced
 
 **Given** a property `email` annotated `#[Confirmed('email_repeat')]`
 **When** documentation is generated
-**Then** the published contract includes a parameter named `email_repeat`
-**And** the description of `email` states that a matching `email_repeat` value must be sent
+**Then** the published contract includes a parameter named `email_confirmation`, and no parameter named `email_repeat`
+**And** the description of `email` states that a matching `email_confirmation` value must be sent
+
+> Laravel Data's `#[Confirmed]` accepts no arguments. On PHP 8.4, PHP silently discards `'email_repeat'`, and at runtime the API requires `email_confirmation`. On PHP 8.3, PHP rejects the declaration when the attribute is read, so neither the application nor the documentation can use that Data object; AC5 applies to PHP 8.4 and later. The documentation follows what is enforced. If a future Laravel Data release passes a custom name through to validation, the documented name must follow it.
 
 #### AC6: Acceptance rule publishes the values that count as acceptance
 
@@ -107,6 +112,25 @@ Key points:
 **When** documentation is generated for the endpoint
 **Then** documentation generation completes successfully
 **And** every other property of that Data object is documented as normal
+
+#### AC11: The companion field's requirement follows its source field
+
+**Given** a property `password` annotated `#[Confirmed]` that is required
+**And** a property `recovery_pin` annotated `#[Confirmed]` that is optional
+**When** documentation is generated
+**Then** `password_confirmation` is published as required
+**And** `recovery_pin_confirmation` is published as optional, with a description stating that it is required when `recovery_pin` is sent
+**And** each companion field is published as nullable exactly when its source field is
+
+#### AC12: Published examples satisfy the documented acceptance and confirmation rules
+
+**Given** a property `terms_accepted` annotated `#[Accepted]`
+**And** a property `data_sharing` annotated `#[Declined]`
+**And** a property `password` annotated `#[Confirmed]`
+**When** documentation is generated
+**Then** the example for `terms_accepted` is one of the values that count as acceptance
+**And** the example for `data_sharing` is one of the values that count as refusal
+**And** the example for `password_confirmation` is identical to the example for `password`
 
 ### Non-Functional Expectations
 

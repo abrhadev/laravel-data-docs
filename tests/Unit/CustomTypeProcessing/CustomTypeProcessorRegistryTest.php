@@ -11,6 +11,10 @@ it('is a singleton', function () {
     expect($instance1)->toBe($instance2);
 });
 
+it('refuses to be unserialized', function () {
+    CustomTypeProcessorRegistry::getInstance()->__wakeup();
+})->throws(Exception::class, 'Cannot unserialize singleton');
+
 it('registers and retrieves processor', function () {
     $processor = new class implements CustomTypeProcessor {
         public function process(string $className, ParameterContext $context): void

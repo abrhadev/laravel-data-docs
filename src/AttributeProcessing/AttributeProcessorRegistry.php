@@ -2,9 +2,15 @@
 
 namespace Abrha\LaravelDataDocs\AttributeProcessing;
 
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\AcceptedIfProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\AcceptedProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\BetweenProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\ConfirmedProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DateFormatProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DeclinedIfProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DeclinedProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DescriptionProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DifferentProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DigitsBetweenProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DigitsProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\EndsWithProcessor;
@@ -16,6 +22,7 @@ use Abrha\LaravelDataDocs\AttributeProcessing\Processors\ExcludeWithoutProcessor
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\ExcludeWithProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\GreaterThanOrEqualToProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\GreaterThanProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\InArrayProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\LessThanOrEqualToProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\LessThanProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\MaxProcessor;
@@ -33,17 +40,24 @@ use Abrha\LaravelDataDocs\AttributeProcessing\Processors\RequiredWithAllProcesso
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\RequiredWithoutAllProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\RequiredWithoutProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\RequiredWithProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\SameProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\SizeProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\StartsWithProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\StaticAttributeProcessor;
 use Abrha\LaravelDataDocs\Attributes\QueryParameter;
+use Spatie\LaravelData\Attributes\Validation\Accepted;
+use Spatie\LaravelData\Attributes\Validation\AcceptedIf;
 use Spatie\LaravelData\Attributes\Validation\ActiveUrl;
 use Spatie\LaravelData\Attributes\Validation\Alpha;
 use Spatie\LaravelData\Attributes\Validation\AlphaDash;
 use Spatie\LaravelData\Attributes\Validation\AlphaNumeric;
 use Spatie\LaravelData\Attributes\Validation\Between;
+use Spatie\LaravelData\Attributes\Validation\Confirmed;
 use Spatie\LaravelData\Attributes\Validation\Date;
 use Spatie\LaravelData\Attributes\Validation\DateFormat;
+use Spatie\LaravelData\Attributes\Validation\Declined;
+use Spatie\LaravelData\Attributes\Validation\DeclinedIf;
+use Spatie\LaravelData\Attributes\Validation\Different;
 use Spatie\LaravelData\Attributes\Validation\Digits;
 use Spatie\LaravelData\Attributes\Validation\DigitsBetween;
 use Spatie\LaravelData\Attributes\Validation\Email;
@@ -56,6 +70,7 @@ use Spatie\LaravelData\Attributes\Validation\Filled;
 use Spatie\LaravelData\Attributes\Validation\EndsWith;
 use Spatie\LaravelData\Attributes\Validation\GreaterThan;
 use Spatie\LaravelData\Attributes\Validation\GreaterThanOrEqualTo;
+use Spatie\LaravelData\Attributes\Validation\InArray;
 use Spatie\LaravelData\Attributes\Validation\IP;
 use Spatie\LaravelData\Attributes\Validation\IPv4;
 use Spatie\LaravelData\Attributes\Validation\IPv6;
@@ -78,6 +93,7 @@ use Spatie\LaravelData\Attributes\Validation\RequiredWith;
 use Spatie\LaravelData\Attributes\Validation\RequiredWithAll;
 use Spatie\LaravelData\Attributes\Validation\RequiredWithout;
 use Spatie\LaravelData\Attributes\Validation\RequiredWithoutAll;
+use Spatie\LaravelData\Attributes\Validation\Same;
 use Spatie\LaravelData\Attributes\Validation\Size;
 use Spatie\LaravelData\Attributes\Validation\StartsWith;
 use Spatie\LaravelData\Attributes\Validation\Ulid;
@@ -178,6 +194,16 @@ final class AttributeProcessorRegistry
         $this->register(ExcludeUnless::class, new ExcludeUnlessProcessor());
         $this->register(ExcludeWith::class, new ExcludeWithProcessor());
         $this->register(ExcludeWithout::class, new ExcludeWithoutProcessor());
+
+        $this->register(Same::class, new SameProcessor());
+        $this->register(Different::class, new DifferentProcessor());
+        $this->register(InArray::class, new InArrayProcessor());
+        $this->register(Confirmed::class, new ConfirmedProcessor());
+
+        $this->register(Accepted::class, new AcceptedProcessor());
+        $this->register(AcceptedIf::class, new AcceptedIfProcessor());
+        $this->register(Declined::class, new DeclinedProcessor());
+        $this->register(DeclinedIf::class, new DeclinedIfProcessor());
 
         $this->register(Example::class, new ExampleProcessor());
         $this->register(Description::class, new DescriptionProcessor());

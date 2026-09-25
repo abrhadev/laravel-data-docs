@@ -1,6 +1,7 @@
 <?php
 
 use Abrha\LaravelDataDocs\Pipeline\Context\ParameterContext;
+use Abrha\LaravelDataDocs\ValueObjects\ConfirmationCompanion;
 use Abrha\LaravelDataDocs\ValueObjects\EnumInfo;
 use Abrha\LaravelDataDocs\ValueObjects\EnumType;
 use Abrha\LaravelDataDocs\ValueObjects\Parameter;
@@ -75,6 +76,17 @@ it('defaults the never-satisfiable flag to false and keeps it out of the Paramet
     $context->neverSatisfiable = true;
 
     expect($context->toParameter()->toArray())->not->toHaveKey('neverSatisfiable')
+        ->and($context->toParameter()->openApiAttributes)->toBe([]);
+});
+
+it('carries a confirmation companion without publishing it', function () {
+    $context = new ParameterContext('password', mock(DataProperty::class));
+
+    expect($context->confirmationCompanion)->toBeNull();
+
+    $context->confirmationCompanion = new ConfirmationCompanion('password_confirmation', 'Must match.', 'Required when sent.');
+
+    expect($context->toParameter()->toArray())->not->toHaveKey('confirmationCompanion')
         ->and($context->toParameter()->openApiAttributes)->toBe([]);
 });
 
