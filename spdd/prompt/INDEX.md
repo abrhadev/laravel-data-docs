@@ -14,11 +14,11 @@ Canvases come in two kinds:
 | Canvas | File | Owns |
 | --- | --- | --- |
 | Parameter metadata pipeline | `LDD-202608281600-[Canvas]-pipeline-parameter-metadata.md` | `src/Pipeline/**` except the two rows below: the stage contract and runner, `PipelineFactory` and the default stage order, `ParameterContext`, and the hidden, type, custom-type, attribute-processing, type-description and default-value stages |
-| Requirement resolution | `LDD-202609260836-[Canvas]-pipeline-requirement-resolution.md` | `Pipeline/Stages/RequiredStage.php`, `Pipeline/Stages/RequirementDescriptionStage.php`, `Pipeline/Support/**` (the requirement seam: `RequirementResolver`, `RequirementStatus`), and the `Required`, `Nullable` and `Sometimes` handling |
+| Requirement resolution | `LDD-202609260836-[Canvas]-pipeline-requirement-resolution.md` | `Pipeline/Stages/RequiredStage.php`, `Pipeline/Stages/RequirementDescriptionStage.php`, `Pipeline/Support/**` (the requirement seam: `RequirementResolver`, `RequirementStatus`), and the `Required`, `Nullable`, `Sometimes` and `Present` handling |
 | Example generation | `LDD-202609260836-[Canvas]-pipeline-example-generation.md` | `Pipeline/Stages/ExampleGenerationStage.php` |
 | Documentation records | `LDD-202608281600-[Canvas]-vo-documentation-records.md` | `src/ValueObjects/**` |
 | Public attributes | `LDD-202608281600-[Canvas]-api-public-attributes.md` | `src/Attributes/**`; `DescriptionProcessor`, `ExampleProcessor`, `QueryParameterProcessor`; registry rows `Description`, `Example`, `QueryParameter` |
-| Attribute processing framework | `LDD-202609251859-[Canvas]-service-attribute-processing-framework.md` | `AttributeProcessor`, `AttributeProcessorRegistry` (lookup, override, and the order of registration, not the rows), `StaticAttributeProcessor` (the mechanism, not its rows), and the shared sentence rules (`<code>` tokens, complete sentences) |
+| Attribute processing framework | `LDD-202609251859-[Canvas]-service-attribute-processing-framework.md` | `AttributeProcessor`, `AttributeProcessorRegistry` (lookup, override, and the order of registration, not the rows), `StaticAttributeProcessor` (the mechanism, not its rows), `Processors/Base/FieldReferenceProcessor`, and the shared sentence rules (field name vs value) |
 | Custom type extension point | `LDD-202608281600-[Canvas]-service-custom-type-extension.md` | `src/CustomTypeProcessing/**` |
 | DTO parameter extraction | `LDD-202608281600-[Canvas]-service-dto-parameter-extraction.md` | `src/Services/**` |
 | Scribe strategies | `LDD-202608281600-[Canvas]-api-scribe-strategies.md` | `src/Strategies/**` |
@@ -32,7 +32,7 @@ Every existing processor and row belongs to its final family from the start. A f
 
 | Family | Story | File | Processors and base class | Rows | Added by its story |
 | --- | --- | --- | --- | --- | --- |
-| Conditional requirement | STORY-001-001 (+ `Filled` from STORY-001-000) | `STORY-001-001-{ts}-[Canvas]-family-conditional-requirement.md`, created by that story; no existing class belongs to it | — | — | `RequiredIf`, `RequiredUnless`, `RequiredWith`, `RequiredWithAll`, `RequiredWithout`, `RequiredWithoutAll`, `Filled` |
+| Conditional requirement | STORY-001-001 (+ `Filled` from STORY-001-000) | `STORY-001-001-202609251859-[Canvas]-family-conditional-requirement.md` | `RequiredIf`, `RequiredUnless`, `RequiredWith`, `RequiredWithAll`, `RequiredWithout`, `RequiredWithoutAll`; `Base/RequirementConditionProcessor` | those six, plus `Filled` (static) | shipped |
 | Prohibition and exclusion | STORY-001-002 | `STORY-001-002-{ts}-[Canvas]-family-prohibition-exclusion.md`, created by that story; no existing class belongs to it | — | — | `Prohibited`, `ProhibitedIf`, `ProhibitedUnless`, `Prohibits`, `Exclude`, `ExcludeIf`, `ExcludeUnless`, `ExcludeWith`, `ExcludeWithout` |
 | Cross-field comparison and acceptance | STORY-001-003 | `STORY-001-003-{ts}-[Canvas]-family-cross-field-acceptance.md`, created by that story; no existing class belongs to it | — | — | `Same`, `Different`, `InArray`, `Confirmed`, `Accepted`, `AcceptedIf`, `Declined`, `DeclinedIf` |
 | Size and bounds | pre-SPDD (extended by STORY-001-005/006/007) | `LDD-202609251859-[Canvas]-family-size-bounds.md` | `Min`, `Max`, `Between`, `Size`, `MultipleOf`, `GreaterThan`, `GreaterThanOrEqualTo`, `LessThan`, `LessThanOrEqualTo`; `Base/SizeBasedProcessor`, `Base/ComparisonProcessor` | those nine | type branches (see below) |
@@ -50,7 +50,7 @@ Every existing processor and row belongs to its final family from the start. A f
 
 **Ownership**
 
-- Ownership is fixed from the start; no class or row changes canvas later. Shared base classes are in the framework canvas. A family's own base class (`SizeBasedProcessor`, `ComparisonProcessor`) is extended only inside that family. A new family that needs similar behaviour builds on a shared base in the framework canvas, never on another family's base.
+- Ownership is fixed from the start; no class or row changes canvas later. Shared base classes (`FieldReferenceProcessor`) are in the framework canvas. A family's own base class (`RequirementConditionProcessor`, `SizeBasedProcessor`, `ComparisonProcessor`) is extended only inside that family. A new family that needs similar behaviour builds on the framework bases. For example, STORY-001-005's field-or-literal date bounds build on `FieldReferenceProcessor`, not on `ComparisonProcessor`.
 - A family canvas specifies its own registry rows. The framework canvas specifies how registration works and in what order the families register.
 - Adding a field to `ParameterContext`, a value object, or a `ParameterGenerator` step is a core contract change. Update that core canvas in the same plan commit as the family canvas that needs it.
 - Not in any canvas: tests, `jig`, CI, Pint, PHPStan, Composer lockfiles, changelog. A family canvas may name its integration test (`tests/Integration/Pipeline/<Family>Test.php`) as its acceptance check.
@@ -81,7 +81,7 @@ SPDD files keep the shape the SPDD commands use, `{ID}-{TIMESTAMP}-[{TAG}]-{scop
 **Workflow for a story**
 
 1. `/spdd-story` → `requirements/`, then `/spdd-analysis` → `spdd/analysis/`. Both are kept.
-2. **Plan commit** (`docs(spdd): …`): extend the story's family canvas with `/spdd-prompt-update`, or create it with `/spdd-reasons-canvas` if no existing class belongs to it (STORY-001-001, STORY-001-002, STORY-001-003 and STORY-001-006). Then run `/spdd-prompt-update` on each core canvas whose contract changes. Review this as a diff against canvases that stay.
+2. **Plan commit** (`docs(spdd): …`): extend the story's family canvas with `/spdd-prompt-update`, or create it with `/spdd-reasons-canvas` if no existing class belongs to it (STORY-001-002, STORY-001-003 and STORY-001-006). Then run `/spdd-prompt-update` on each core canvas whose contract changes. Review this as a diff against canvases that stay.
 3. **Feature commit** (`feat: …`): `/spdd-generate` from the family canvas, scoped to the plan commit's diff on core canvases, plus tests. Use `/spdd-sync` for anything the implementation had to change. Nothing is folded or deleted.
 
 **Cross-cutting changes**

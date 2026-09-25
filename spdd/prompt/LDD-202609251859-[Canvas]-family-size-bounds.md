@@ -4,7 +4,7 @@ Family canvas, pre-SPDD (no story of its own). Owns `MinProcessor`, `MaxProcesso
 
 Extended by STORY-001-005 (dates), STORY-001-006 (files) and STORY-001-007 (arrays): each adds a type branch to `SizeBasedProcessor` here, and its own family canvas refers to that branch. This is the one planned case of a story editing a second family (`INDEX.md`).
 
-Related canvases: attribute processing framework (registry); pipeline canvases (`ParameterContext`'s constraint fields, all `?int`; `TypeStage` writes the `type` the unit is chosen by; `ExampleGenerationStage` reads the bounds).
+Related canvases: attribute processing framework (`FieldReferenceProcessor`, `operand`); pipeline canvases (`ParameterContext`'s constraint fields, all `?int`; `TypeStage` writes the `type` the unit is chosen by; `ExampleGenerationStage` reads the bounds).
 
 Reverse-codified from the v0.4.0 code with `/spdd-reverse`.
 
@@ -23,12 +23,15 @@ classDiagram
         #getUnit(ParameterContext, int) string
         #applyConstraint(ParameterContext, string property, int value) void
     }
+    class FieldReferenceProcessor {
+        <<abstract>>
+    }
     class ComparisonProcessor {
         <<abstract>>
         #extractValue(mixed) string
     }
     SizeBasedProcessor ..|> AttributeProcessor
-    ComparisonProcessor ..|> AttributeProcessor
+    ComparisonProcessor --|> FieldReferenceProcessor
     MinProcessor --|> SizeBasedProcessor
     MaxProcessor --|> SizeBasedProcessor
     BetweenProcessor --|> SizeBasedProcessor
@@ -39,13 +42,13 @@ classDiagram
     LessThanOrEqualToProcessor --|> ComparisonProcessor
 ```
 
-`MultipleOfProcessor` implements `AttributeProcessor` directly.
+`MultipleOfProcessor` implements `AttributeProcessor` directly. `ComparisonProcessor` was rebased onto `FieldReferenceProcessor` without changing its own signature, so the four comparison processors were not touched for that reason alone.
 
 ## Approach
 
 **A bound is written as declared.** Each processor reads its argument from `parameters()` and, when it is not null, writes it to the constraint field the documented type selects and appends one sentence. There is no other guard: the argument's type is not checked before use.
 
-**A comparison operand renders as a value.** The four comparison processors render their operand as `<code>{value}</code>`, where the value is `extractValue` of the parameter, so a literal bound and a `FieldReference`'s name read the same (`<code>5</code>`, `<code>min_price</code>`). They are the only shipped path that can receive a `FieldReference`.
+**A comparison operand renders as a field or a value.** The four comparison processors render their operand through `operand()`, so a literal bound stays `<code>5</code>` and a `FieldReference` becomes `<b><i>min_price</i></b>`. They are the only shipped path besides the `ConditionProcessor`-based families that can receive a `FieldReference`.
 
 Known divergences:
 
@@ -60,7 +63,7 @@ Known divergences:
 
 ## Structure
 
-`Processors/Base/SizeBasedProcessor.php` implements `AttributeProcessor` directly and is unrelated to the other bases. `Processors/Base/ComparisonProcessor.php` implements `AttributeProcessor` directly. `MinProcessor`, `MaxProcessor`, `BetweenProcessor`, `SizeProcessor` extend `SizeBasedProcessor`; the four comparison processors extend `ComparisonProcessor`; `MultipleOfProcessor` stands alone.
+`Processors/Base/SizeBasedProcessor.php` implements `AttributeProcessor` directly and is unrelated to the other bases. `Processors/Base/ComparisonProcessor.php` extends `FieldReferenceProcessor`. `MinProcessor`, `MaxProcessor`, `BetweenProcessor`, `SizeProcessor` extend `SizeBasedProcessor`; the four comparison processors extend `ComparisonProcessor`; `MultipleOfProcessor` stands alone.
 
 ## Operations
 
@@ -71,7 +74,7 @@ Known divergences:
 
 ### ComparisonProcessor
 
-- `extractValue(mixed $value): string`: a Spatie `FieldReference` returns its `name`; anything else is cast to string.
+- `extractValue`: delegates to `extractFieldName`. Signature and visibility are unchanged from before the rebase, so third-party subclasses are unaffected.
 
 ### Attributes
 
@@ -84,12 +87,12 @@ Known divergences:
 | `Between` | `BetweenProcessor` (same) | `parameters()[0]` and `[1]`, both not null | `applyConstraint(min)` and `(max)` | `Must have between <code>{min}</code> and <code>{max}</code> {unit}.` / `Must be between <code>{min}</code> and <code>{max}</code>.`; the unit is singular only when both bounds are the int 1 (`=== 1`) | none | generation reads the bounds |
 | `Size` | `SizeProcessor` (same) | single value, when not null | `applyConstraint` min and max to the same value | `Must have exactly <code>{value}</code> {unit}.` / `Must be exactly <code>{value}</code>.` | none | generation reads the bounds |
 | `MultipleOf` | `MultipleOfProcessor` | first parameter, when not null | `multipleOf` = the declared value | `Must be a multiple of {value}.` (no `<code>`) | none | generation picks a multiple |
-| `GreaterThan` | `GreaterThanProcessor` (`ComparisonProcessor`) | first parameter, when not null | `exclusiveMinimum` = int of the value when `is_numeric`, else null | `Must be greater than <code>{value}</code>.` | none | generation reads the bound |
-| `GreaterThanOrEqualTo` | `GreaterThanOrEqualToProcessor` (same) | same | `minimum` = int of the value when `is_numeric`, else null | `Must be greater than or equal to <code>{value}</code>.` | none | same |
-| `LessThan` | `LessThanProcessor` (same) | same | `exclusiveMaximum` = int of the value when `is_numeric`, else null | `Must be less than <code>{value}</code>.` | none | same |
-| `LessThanOrEqualTo` | `LessThanOrEqualToProcessor` (same) | same | `maximum` = int of the value when `is_numeric`, else null | `Must be less than or equal to <code>{value}</code>.` | none | same |
+| `GreaterThan` | `GreaterThanProcessor` (`ComparisonProcessor`) | first parameter, when not null | `exclusiveMinimum` = int of the value when `is_numeric`, else null | `Must be greater than {operand}.` | none | generation reads the bound |
+| `GreaterThanOrEqualTo` | `GreaterThanOrEqualToProcessor` (same) | same | `minimum` = int of the value when `is_numeric`, else null | `Must be greater than or equal to {operand}.` | none | same |
+| `LessThan` | `LessThanProcessor` (same) | same | `exclusiveMaximum` = int of the value when `is_numeric`, else null | `Must be less than {operand}.` | none | same |
+| `LessThanOrEqualTo` | `LessThanOrEqualToProcessor` (same) | same | `maximum` = int of the value when `is_numeric`, else null | `Must be less than or equal to {operand}.` | none | same |
 
-- `{value}`, and the value `is_numeric` tests, is `extractValue` of the parameter. A comparison reference is never numeric, so it nulls the constraint field.
+- The value compared by `is_numeric` is `extractValue` of the parameter: a `FieldReference`'s name, anything else cast to string. A comparison reference is never numeric, so it nulls the constraint field.
 
 ## Norms
 
@@ -99,4 +102,4 @@ Known divergences:
 
 - Size-based and `MultipleOf` processors skip constraint application and description when the first (or both, for `Between`) parameter is null.
 - Numeric comparison OpenAPI fields are not set from non-numeric values (including field names); descriptions still mention those names.
-- Each processor has one Pest file under `tests/Unit/AttributeProcessing/Processors/`: the Min, Max and Size files cover the integer, string and array branches, the Between file integer and string, and the MultipleOf and four comparison files one integer case each. No file covers a float, a field reference or an `ExternalReference`.
+- Each processor has one Pest file under `tests/Unit/AttributeProcessing/Processors/`: the Min, Max and Size files cover the integer, string and array branches, the Between file integer and string, and the MultipleOf and four comparison files one integer case each. The four comparison files also pin a `FieldReference`, rendered as a field name with the constraint field left null. No file covers a float or an `ExternalReference`.

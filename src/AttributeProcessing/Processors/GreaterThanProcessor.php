@@ -15,7 +15,7 @@ final class GreaterThanProcessor extends ComparisonProcessor
         if ($value !== null) {
             $valueStr = $this->extractValue($value);
             $context->exclusiveMinimum = is_numeric($valueStr) ? (int) $valueStr : null;
-            $context->descriptions[] = "Must be greater than <code>{$valueStr}</code>.";
+            $context->descriptions[] = "Must be greater than {$this->operand($value)}.";
         }
     }
 }

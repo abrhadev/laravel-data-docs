@@ -23,6 +23,8 @@ final class ParameterContext
 
     public bool $onlyValidatedWhenPresent = false;
 
+    public bool $presentAcceptsEmpty = false;
+
     public ?ParameterLocation $location = null;
 
     public string $description = '';

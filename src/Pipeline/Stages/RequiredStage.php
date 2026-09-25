@@ -7,7 +7,8 @@ use Abrha\LaravelDataDocs\Pipeline\ParameterPipelineStage;
 use Abrha\LaravelDataDocs\Pipeline\Support\RequirementResolver;
 
 /**
- * Sole authority on required, nullable and onlyValidatedWhenPresent. Assigns
+ * Sole authority on required, nullable, onlyValidatedWhenPresent and
+ * presentAcceptsEmpty. Assigns
  * unconditionally, so anything an earlier stage wrote to those fields is
  * replaced; no attribute processor should be registered for Required, Nullable
  * or Sometimes.
@@ -29,6 +30,7 @@ final class RequiredStage implements ParameterPipelineStage
         $context->required = $status->required;
         $context->nullable = $status->nullable;
         $context->onlyValidatedWhenPresent = $status->onlyValidatedWhenPresent;
+        $context->presentAcceptsEmpty = $status->presentAcceptsEmpty;
 
         return $context;
     }
@@ -42,6 +44,7 @@ final class RequiredStage implements ParameterPipelineStage
             && !$type->isOptional
             && !$context->property->hasDefaultValue;
         $context->onlyValidatedWhenPresent = $type->isOptional;
+        $context->presentAcceptsEmpty = false;
 
         return $context;
     }

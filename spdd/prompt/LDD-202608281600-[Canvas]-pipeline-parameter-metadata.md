@@ -45,6 +45,7 @@ classDiagram
         +required bool~
         +nullable bool~
         +onlyValidatedWhenPresent bool
+        +presentAcceptsEmpty bool
         +location ParameterLocation~
         +description string
         +example mixed
@@ -103,7 +104,7 @@ classDiagram
 
 Collaborating types used by this module but not owned by it:
 
-- `DataProperty` (Spatie): reflection of the property; stages read `attributes`, `type` (kind, type, dataClass, iterableItemType, isNullable, isOptional), `hasDefaultValue` and `defaultValue`.
+- `DataProperty` (Spatie): reflection of the property; stages read `attributes`, `type` (kind, type, dataClass, iterableItemType, isNullable, isOptional, `getAcceptedTypes()`), `hasDefaultValue`, `defaultValue`, and `cast` (the resolver's `isPlainString`).
 - `Hidden` attribute: presence on the property sets `isHidden`.
 - `CustomTypeConfig`: readonly bag of documentation type plus constraint fields; built via `fromArray` which requires `type` and `descriptions` keys.
 - `CustomTypeProcessorRegistry` singleton and `CustomTypeProcessor`: optional fallback after config lookup.
@@ -193,8 +194,8 @@ Layering: this is a domain processing layer. It does not own HTTP, OpenAPI docum
 
 - Responsibility: accumulate documentation fields for one named property.
 - Constructor takes readonly `name` (string) and readonly `property` (`DataProperty`).
-- Defaults: `isHidden` false, nested/array flags false, `onlyValidatedWhenPresent` false, `type`/`required`/`nullable`/`location`/`enumInfo`/`dataClass`/`format`/`pattern` and numeric constraints null, `description` empty string, `example` null, `default` null, `descriptions` empty array.
-- `onlyValidatedWhenPresent` is a non-nullable bool (unlike `required`/`nullable`, which are nullable). It drives description text only and is deliberately absent from `toParameter()`, so it reaches neither `Parameter` nor `openApiAttributes`.
+- Defaults: `isHidden` false, nested/array flags false, `onlyValidatedWhenPresent` false, `presentAcceptsEmpty` false, `type`/`required`/`nullable`/`location`/`enumInfo`/`dataClass`/`format`/`pattern` and numeric constraints null, `description` empty string, `example` null, `default` null, `descriptions` empty array.
+- `onlyValidatedWhenPresent` and `presentAcceptsEmpty` are non-nullable bools (unlike `required`/`nullable`, which are nullable). They drive description text only and are deliberately absent from `toParameter()`, so they reach neither `Parameter` nor `openApiAttributes`.
 - `enumInfo` is written only by `TypeStage`.
 - Method `toParameter()` builds `Parameter` with defaults listed under Entities. `enumValues` is `enumInfo?->toArray()`. `openApiAttributes` includes default, format, min/max, exclusive min/max, pattern, length and items bounds, multipleOf, with nulls removed via `array_filter` using `!== null`.
 

@@ -54,7 +54,6 @@ Known divergences:
 - `Hidden` implements `DataDocsAttribute` but is not registered in `AttributeProcessorRegistry`.
 - `ResponseData` implements `DataDocsAttribute` but uses `TARGET_METHOD`.
 - `Description` is repeatable and accepts variadic strings in one instance.
-- `Description`'s class docblock says its text is appended to the generated type and validation sentences; it precedes the validation sentences (Operations).
 - `DataDocsAttribute`’s class docblock claims implementors are automatically recognized by AttributeProcessingStage. That is false for Hidden (HiddenStage) and ResponseData (method-only).
 - The `QueryParameter` docblock and the README say that a GET request treats every property as a query parameter by default. `ParameterFilter` does that only while no property is marked; once one is marked, unmarked properties stay in the body (DTO extraction canvas).
 
@@ -80,7 +79,7 @@ The three processors live in `src/AttributeProcessing/Processors/` beside the fa
 
 - PHP attribute: `TARGET_PROPERTY` and `IS_REPEATABLE`.
 - Constructor: variadic `string ...$descriptions` stored in readonly `descriptions` array (may be empty if called with no strings).
-- Placement: custom text follows the generated type sentence and precedes the validation sentences, wherever the attribute is declared; every sentence a later stage appends comes after it. That holds because `TypeDescriptionStage` runs after `AttributeProcessingStage` and prepends the type sentence, and `AttributeProcessingStage` processes `DataDocsAttribute` instances before Spatie validation rules. The class docblock says instead that descriptions are appended to the generated type and validation sentences. A custom type's sentences, appended earlier by `CustomTypeStage`, come before the `Description` text. `README.md` states the order for the type and validation sentences; it does not mention a custom type's sentences.
+- Class docblock states the placement: custom text follows the generated type sentence and precedes the validation and requirement sentences, wherever the attribute is declared. That holds because `TypeDescriptionStage` runs after `AttributeProcessingStage` and prepends the type sentence, `AttributeProcessingStage` processes `DataDocsAttribute` instances before Spatie validation rules, and the requirement sentences are appended later by the pipeline. A custom type's sentences, appended earlier by `CustomTypeStage`, come before the `Description` text. `README.md` states the order for the type and validation sentences only; it does not mention the requirement sentences or a custom type's sentences.
 
 ### Example
 
@@ -118,7 +117,7 @@ Package attributes are read via public properties, not `parameters()`. Registere
 ## Safeguards
 
 - Description is the only repeatable attribute in this set.
-- On a Data property, Description text lands after the type sentence and before every validation sentence, independent of where the attribute is declared. The README states the same order.
+- On a Data property, Description text lands after the type sentence and before every validation and requirement sentence, independent of where the attribute is declared. `tests/Integration/Pipeline/DescriptionOrderTest.php` pins one complete description through the default pipeline, with `Description` declared last.
 - ResponseData does not validate that `dtoClass` exists or is a Laravel Data class; `ParameterGenerator` returns no fields for a class that does not exist (DTO extraction canvas).
 - Example allows any PHP value including null; null is indistinguishable later from “no example” at ExampleGenerationStage (`example !== null`).
 - An explicit `#[Example]` is published as given: generation applies only to a field with no example (example generation canvas), so an example that breaks the field's own rules is the author's to fix.

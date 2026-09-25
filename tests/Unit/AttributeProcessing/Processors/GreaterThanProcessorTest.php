@@ -3,6 +3,7 @@
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\GreaterThanProcessor;
 use Abrha\LaravelDataDocs\Pipeline\Context\ParameterContext;
 use Spatie\LaravelData\Attributes\Validation\GreaterThan;
+use Spatie\LaravelData\Support\Validation\References\FieldReference;
 use Spatie\LaravelData\Data;
 use Spatie\LaravelData\Support\DataConfig;
 
@@ -30,4 +31,15 @@ it('sets exclusiveMinimum and appends description', function () {
 
     expect($context->exclusiveMinimum)->toBe(0)
         ->and($context->descriptions)->toContain('Must be greater than <code>0</code>.');
+});
+
+it('renders a field reference as a field name, not a value', function () {
+    // The only shipped path that can carry a FieldReference. A reference is not
+    // numeric, so the constraint field stays null exactly as it did before.
+    $context = conditionContext();
+
+    $this->processor->process(new GreaterThan(new FieldReference('min_price')), $context);
+
+    expect($context->descriptions)->toContain('Must be greater than <b><i>min_price</i></b>.')
+        ->and($context->exclusiveMinimum)->toBeNull();
 });

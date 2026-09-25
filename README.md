@@ -188,7 +188,7 @@ class ProductData extends Data
 
 ### `#[Description]`
 
-Adds one or more custom description strings to a parameter. These are appended after the generated type sentence and before validation sentences. The attribute is repeatable and accepts one or more strings.
+Adds one or more custom description strings to a parameter. These are appended after the generated type sentence and before the validation and requirement sentences, wherever the attribute is declared. The attribute is repeatable and accepts one or more strings.
 
 ```php
 use Abrha\LaravelDataDocs\Attributes\Description;
@@ -624,7 +624,7 @@ The package uses a pipeline pattern to process each property in your Data classe
    - `DefaultValueStage`: Extracts default values
    - `DefaultValueDescriptionStage`: Generates default value descriptions
    - `RequiredStage`: Determines if field is required
-   - `RequirementDescriptionStage`: Adds the presence sentences
+   - `RequirementDescriptionStage`: Adds the presence and null-value sentences
    - `ExampleGenerationStage`: Generates example values using Faker
 3. **Parameter Generation**: Context is converted to API parameter format
 4. **OpenAPI Enhancement**: The ExtendedOpenApiGenerator merges additional OpenAPI schema information into the final specification

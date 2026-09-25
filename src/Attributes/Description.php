@@ -7,7 +7,8 @@ use Attribute;
 /**
  * Adds one or more custom description strings to a parameter in API documentation.
  *
- * Descriptions are appended to the generated type and validation sentences.
+ * Descriptions follow the generated type sentence and precede the validation
+ * and requirement sentences, wherever the attribute is declared.
  * The attribute is repeatable and accepts one or more strings.
  *
  * @example
