@@ -9,5 +9,6 @@ final class RequirementStatus
         public readonly bool $nullable,
         public readonly bool $onlyValidatedWhenPresent,
         public readonly bool $presentAcceptsEmpty = false,
+        public readonly bool $neverSatisfiable = false,
     ) {}
 }

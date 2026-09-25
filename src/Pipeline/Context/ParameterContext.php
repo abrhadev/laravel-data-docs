@@ -25,6 +25,8 @@ final class ParameterContext
 
     public bool $presentAcceptsEmpty = false;
 
+    public bool $neverSatisfiable = false;
+
     public ?ParameterLocation $location = null;
 
     public string $description = '';

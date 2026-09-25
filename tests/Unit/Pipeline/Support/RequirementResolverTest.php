@@ -101,6 +101,44 @@ it('honours a customised inferrer list rather than a hardcoded one', function ()
         ->and($status->required)->toBeFalse();
 });
 
+function prohibitionProperty(string $name): DataProperty
+{
+    return app(DataConfig::class)
+        ->getDataClass(ProhibitionResolverTestData::class)
+        ->properties
+        ->first(fn($property) => $property->name === $name);
+}
+
+it('publishes a required-by-type prohibited or excluded property as required', function (string $property) {
+    // Neither family implements RequiringRule, so the inferred Required stays.
+    expect($this->resolver->resolve(prohibitionProperty($property))->required)->toBeTrue();
+})->with([
+    'Prohibited' => ['locked'],
+    'Exclude'    => ['excluded'],
+]);
+
+it('flags a required, non-empty, barely prohibited property as never satisfiable', function (string $property) {
+    expect($this->resolver->resolve(prohibitionProperty($property))->neverSatisfiable)->toBeTrue();
+})->with([
+    'prohibited alone' => ['locked'],
+    // Prohibited runs before the exclusion, so a sent value is still rejected.
+    'exclusion declared after' => ['prohibitedFirst'],
+]);
+
+it('does not flag a property some request can satisfy', function (string $property) {
+    expect($this->resolver->resolve(prohibitionProperty($property))->neverSatisfiable)->toBeFalse();
+})->with([
+    'defaulted'             => ['defaulted'],
+    'nullable'              => ['nullable'],
+    'present, may be empty' => ['presentProhibited'],
+    'conditional'           => ['conditional'],
+    'excluded'              => ['excluded'],
+    'wrapped rule'          => ['wrapped'],
+    // Laravel stops validating a field once it is excluded, so Prohibited never runs.
+    'excluded first'               => ['excludedFirst'],
+    'conditionally excluded first' => ['conditionallyExcludedFirst'],
+]);
+
 function conditionalProperty(string $name): DataProperty
 {
     return app(DataConfig::class)
@@ -253,5 +291,35 @@ class RequirementResolverTestData extends Data
         public string $requiredThenSometimes,
         #[Spatie\LaravelData\Attributes\Validation\Required]
         public string $status = 'draft',
+    ) {}
+}
+
+class ProhibitionResolverTestData extends Data
+{
+    public function __construct(
+        #[Spatie\LaravelData\Attributes\Validation\Prohibited]
+        public string $locked,
+        #[Spatie\LaravelData\Attributes\Validation\Prohibited]
+        public ?string $nullable,
+        #[Spatie\LaravelData\Attributes\Validation\Present]
+        #[Spatie\LaravelData\Attributes\Validation\Prohibited]
+        public ?string $presentProhibited,
+        #[Spatie\LaravelData\Attributes\Validation\ProhibitedIf('plan', 'enterprise')]
+        public string $conditional,
+        #[Spatie\LaravelData\Attributes\Validation\Exclude]
+        public string $excluded,
+        #[Spatie\LaravelData\Attributes\Validation\Prohibited(new Illuminate\Validation\Rules\ProhibitedIf(true))]
+        public string $wrapped,
+        #[Spatie\LaravelData\Attributes\Validation\Exclude]
+        #[Spatie\LaravelData\Attributes\Validation\Prohibited]
+        public string $excludedFirst,
+        #[Spatie\LaravelData\Attributes\Validation\ExcludeIf('mode', 'legacy')]
+        #[Spatie\LaravelData\Attributes\Validation\Prohibited]
+        public string $conditionallyExcludedFirst,
+        #[Spatie\LaravelData\Attributes\Validation\Prohibited]
+        #[Spatie\LaravelData\Attributes\Validation\Exclude]
+        public string $prohibitedFirst,
+        #[Spatie\LaravelData\Attributes\Validation\Prohibited]
+        public string $defaulted = 'x',
     ) {}
 }

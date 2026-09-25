@@ -26,12 +26,12 @@ it('states a multi-value condition', function () {
     ]);
 });
 
-it('renders a backed enum by its backing value', function () {
+it('renders a backed enum by its case name and backing value', function () {
     $context = conditionContext();
 
     $this->processor->process(new RequiredUnless('status', ConditionAccountType::Charity), $context);
 
-    expect($context->descriptions)->toBe(['Required unless <b><i>status</i></b> is <code>charity</code>.']);
+    expect($context->descriptions)->toBe(['Required unless <b><i>status</i></b> is <code>Charity</code> (charity).']);
 });
 
 it('renders a null comparison value', function () {

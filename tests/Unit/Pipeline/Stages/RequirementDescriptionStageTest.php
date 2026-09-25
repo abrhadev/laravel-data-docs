@@ -139,6 +139,33 @@ it('states Present before the nullable sentence', function () {
         ->toBe('Must be included in the request, but may be empty. A null value is accepted.');
 });
 
+it('warns when the field can never pass validation', function () {
+    $context = new ParameterContext('locked', $this->property);
+    $context->description = 'Must be a string. Must not be sent; the request is rejected if it is.';
+    $context->neverSatisfiable = true;
+
+    expect($this->stage->process($context)->description)->toBe(
+        'Must be a string. Must not be sent; the request is rejected if it is. Note: this field is both required and prohibited, so no request can pass validation.'
+    );
+});
+
+it('does not warn when the field can pass validation', function () {
+    $context = new ParameterContext('open', $this->property);
+    $context->description = 'Must be a string.';
+
+    expect($this->stage->process($context)->description)->toBe('Must be a string.');
+});
+
+it('states the warning after the nullable sentence', function () {
+    $context = new ParameterContext('locked', $this->property);
+    $context->nullable = true;
+    $context->neverSatisfiable = true;
+
+    expect($this->stage->process($context)->description)->toBe(
+        'A null value is accepted. Note: this field is both required and prohibited, so no request can pass validation.'
+    );
+});
+
 class RequirementDescriptionTestData extends Data
 {
     public function __construct(

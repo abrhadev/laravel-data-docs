@@ -230,7 +230,8 @@ it('falls back to the type-derived computation when the resolver cannot reconcil
 
     expect($result->required)->toBe($required)
         ->and($result->nullable)->toBe($nullable)
-        ->and($result->onlyValidatedWhenPresent)->toBe($onlyValidatedWhenPresent);
+        ->and($result->onlyValidatedWhenPresent)->toBe($onlyValidatedWhenPresent)
+        ->and($result->neverSatisfiable)->toBeFalse();
 })->with([
     // [property, required, nullable, onlyValidatedWhenPresent]
     'plain type'                    => ['fullyRequired', true, false, false],
@@ -241,6 +242,29 @@ it('falls back to the type-derived computation when the resolver cannot reconcil
     'nullable + Optional'           => ['nullableAndOptional', false, true, true],
     'nullable + Optional + default' => ['allThree', false, true, true],
 ]);
+
+it('copies the never-satisfiable flag from the resolver', function (string $property, bool $neverSatisfiable) {
+    $dataProperty = $this->dataConfig->getDataClass(NeverSatisfiableStageTestData::class)
+        ->properties
+        ->first(fn($p) => $p->name === $property);
+
+    $result = $this->stage->process(new ParameterContext($dataProperty->name, $dataProperty));
+
+    expect($result->neverSatisfiable)->toBe($neverSatisfiable);
+})->with([
+    'required and prohibited' => ['locked', true],
+    'nullable and prohibited' => ['open', false],
+]);
+
+class NeverSatisfiableStageTestData extends Data
+{
+    public function __construct(
+        #[Spatie\LaravelData\Attributes\Validation\Prohibited]
+        public string $locked,
+        #[Spatie\LaravelData\Attributes\Validation\Prohibited]
+        public ?string $open,
+    ) {}
+}
 
 class RequiredTestData extends Data
 {

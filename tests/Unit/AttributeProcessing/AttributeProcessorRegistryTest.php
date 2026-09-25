@@ -63,6 +63,21 @@ it('registers a processor for every conditional requirement attribute', function
     'RequiredWithoutAll' => [Spatie\LaravelData\Attributes\Validation\RequiredWithoutAll::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\RequiredWithoutAllProcessor::class],
 ]);
 
+it('registers a processor for every prohibition and exclusion attribute', function (string $attribute, string $processor) {
+    expect(AttributeProcessorRegistry::getInstance()->getProcessorFor($attribute))
+        ->toBeInstanceOf($processor);
+})->with([
+    'Prohibited'       => [Spatie\LaravelData\Attributes\Validation\Prohibited::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\ProhibitedProcessor::class],
+    'ProhibitedIf'     => [Spatie\LaravelData\Attributes\Validation\ProhibitedIf::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\ProhibitedIfProcessor::class],
+    'ProhibitedUnless' => [Spatie\LaravelData\Attributes\Validation\ProhibitedUnless::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\ProhibitedUnlessProcessor::class],
+    'Prohibits'        => [Spatie\LaravelData\Attributes\Validation\Prohibits::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\ProhibitsProcessor::class],
+    'Exclude'          => [Spatie\LaravelData\Attributes\Validation\Exclude::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\ExcludeProcessor::class],
+    'ExcludeIf'        => [Spatie\LaravelData\Attributes\Validation\ExcludeIf::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\ExcludeIfProcessor::class],
+    'ExcludeUnless'    => [Spatie\LaravelData\Attributes\Validation\ExcludeUnless::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\ExcludeUnlessProcessor::class],
+    'ExcludeWith'      => [Spatie\LaravelData\Attributes\Validation\ExcludeWith::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\ExcludeWithProcessor::class],
+    'ExcludeWithout'   => [Spatie\LaravelData\Attributes\Validation\ExcludeWithout::class, Abrha\LaravelDataDocs\AttributeProcessing\Processors\ExcludeWithoutProcessor::class],
+]);
+
 it('registers a description-only processor for Filled', function () {
     expect(AttributeProcessorRegistry::getInstance()->getProcessorFor(Spatie\LaravelData\Attributes\Validation\Filled::class))
         ->toBeInstanceOf(Abrha\LaravelDataDocs\AttributeProcessing\Processors\StaticAttributeProcessor::class);

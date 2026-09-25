@@ -26,12 +26,32 @@ it('states a multi-value condition', function () {
     ]);
 });
 
-it('renders a backed enum by its backing value', function () {
+it('renders a backed enum by its case name and backing value', function () {
     $context = conditionContext();
 
     $this->processor->process(new RequiredIf('account_type', ConditionAccountType::Business), $context);
 
-    expect($context->descriptions)->toBe(['Required when <b><i>account_type</i></b> is <code>business</code>.']);
+    expect($context->descriptions)->toBe(['Required when <b><i>account_type</i></b> is <code>Business</code> (business).']);
+});
+
+it('renders several backed enums by case name and backing value', function () {
+    $context = conditionContext();
+
+    $this->processor->process(new RequiredIf('account_type', [ConditionAccountType::Business, ConditionAccountType::Charity]), $context);
+
+    expect($context->descriptions)->toBe([
+        'Required when <b><i>account_type</i></b> is one of: <code>Business</code> (business), <code>Charity</code> (charity).',
+    ]);
+});
+
+it('renders boolean values as true and false', function () {
+    $context = conditionContext();
+
+    $this->processor->process(new RequiredIf('subscribed', [true, false]), $context);
+
+    expect($context->descriptions)->toBe([
+        'Required when <b><i>subscribed</i></b> is one of: <code>true</code>, <code>false</code>.',
+    ]);
 });
 
 it('degrades to a value-free sentence for an external reference', function () {

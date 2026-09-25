@@ -2,6 +2,9 @@
 
 use Abrha\LaravelDataDocs\Pipeline\Context\ParameterContext;
 use Abrha\LaravelDataDocs\Pipeline\Stages\DefaultValueDescriptionStage;
+use Abrha\LaravelDataDocs\Pipeline\Stages\DefaultValueStage;
+use Spatie\LaravelData\Data;
+use Spatie\LaravelData\Support\DataConfig;
 use Spatie\LaravelData\Support\DataProperty;
 
 beforeEach(function () {
@@ -138,3 +141,45 @@ it('returns the same context instance', function () {
 
     expect($result)->toBe($context);
 });
+
+it('renders a backed enum default by its case name and backing value', function () {
+    $property = app(DataConfig::class)->getDataClass(EnumDefaultDescriptionTestData::class)->properties->first(fn($p) => $p->name === 'status');
+    $context = (new DefaultValueStage())->process(new ParameterContext('status', $property));
+    $context->description = 'Must be one of: <code>Active</code> (active), <code>Inactive</code> (inactive).';
+
+    $result = $this->stage->process($context);
+
+    expect($result->description)->toBe(
+        'Must be one of: <code>Active</code> (active), <code>Inactive</code> (inactive). Defaults to <code>Active</code> (active).'
+    );
+});
+
+it('renders a pure enum default by its case name', function () {
+    $property = app(DataConfig::class)->getDataClass(EnumDefaultDescriptionTestData::class)->properties->first(fn($p) => $p->name === 'role');
+    $context = (new DefaultValueStage())->process(new ParameterContext('role', $property));
+    $context->description = '';
+
+    $result = $this->stage->process($context);
+
+    expect($result->description)->toBe('Defaults to <code>ADMIN</code>.');
+});
+
+enum DefaultDescriptionTestBackedEnum: string
+{
+    case Active = 'active';
+    case Inactive = 'inactive';
+}
+
+enum DefaultDescriptionTestUnitEnum
+{
+    case ADMIN;
+    case USER;
+}
+
+class EnumDefaultDescriptionTestData extends Data
+{
+    public function __construct(
+        public DefaultDescriptionTestBackedEnum $status = DefaultDescriptionTestBackedEnum::Active,
+        public DefaultDescriptionTestUnitEnum $role = DefaultDescriptionTestUnitEnum::ADMIN,
+    ) {}
+}

@@ -4,9 +4,15 @@ namespace Abrha\LaravelDataDocs\Pipeline\Support;
 
 use Spatie\LaravelData\Attributes\Validation\Accepted;
 use Spatie\LaravelData\Attributes\Validation\Declined;
+use Spatie\LaravelData\Attributes\Validation\Exclude;
+use Spatie\LaravelData\Attributes\Validation\ExcludeIf;
+use Spatie\LaravelData\Attributes\Validation\ExcludeUnless;
+use Spatie\LaravelData\Attributes\Validation\ExcludeWith;
+use Spatie\LaravelData\Attributes\Validation\ExcludeWithout;
 use Spatie\LaravelData\Attributes\Validation\Filled;
 use Spatie\LaravelData\Attributes\Validation\Nullable;
 use Spatie\LaravelData\Attributes\Validation\Present;
+use Spatie\LaravelData\Attributes\Validation\Prohibited;
 use Spatie\LaravelData\Attributes\Validation\RequiredIf;
 use Spatie\LaravelData\Attributes\Validation\RequiredUnless;
 use Spatie\LaravelData\Attributes\Validation\RequiredWith;
@@ -65,6 +71,19 @@ use Throwable;
  * answer given before this distinction existed; guessing optional would risk
  * publishing a mandatory field as optional, the failure this class was written
  * to eliminate.
+ *
+ * Prohibition never changes requirement status: Prohibited is not a requiring
+ * rule, so a non-nullable property without a default still infers Required and
+ * is published as required. Such a field can never pass when the key must be
+ * sent, the value must be non-empty, and a bare Prohibited demands it be empty,
+ * which is what neverSatisfiable states. It reads rejectsEmpty rather than
+ * required alone because #[Present, Prohibited] is satisfied by an empty value.
+ * Bare means no wrapped rule object, whose condition may make the field
+ * satisfiable; it is tested by loose equality against a fresh instance, because
+ * stringifying the attribute would evaluate the wrapped rule's condition. An
+ * exclusion rule earlier in the list also withholds it: Laravel runs rules in
+ * this order and stops validating a field once it is excluded, so
+ * #[Exclude, Prohibited] passes a request that sends a value.
  */
 final class RequirementResolver
 {
@@ -87,6 +106,14 @@ final class RequirementResolver
         Accepted::class,
         Declined::class,
         Filled::class,
+    ];
+
+    private const EXCLUDING_RULES = [
+        Exclude::class,
+        ExcludeIf::class,
+        ExcludeUnless::class,
+        ExcludeWith::class,
+        ExcludeWithout::class,
     ];
 
     /**
@@ -145,7 +172,27 @@ final class RequirementResolver
                 && $nullable
                 && $rules->hasType(Present::class)
                 && $this->isPlainString($property),
+            neverSatisfiable: $required
+                && $rejectsEmpty
+                && $this->hasUnexcludedBareProhibition($rules),
         );
+    }
+
+    private function hasUnexcludedBareProhibition(PropertyRules $rules): bool
+    {
+        foreach ($rules->all() as $rule) {
+            foreach (self::EXCLUDING_RULES as $excluding) {
+                if ($rule instanceof $excluding) {
+                    return false;
+                }
+            }
+
+            if ($rule instanceof Prohibited && $rule == new Prohibited()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function isPlainString(DataProperty $property): bool

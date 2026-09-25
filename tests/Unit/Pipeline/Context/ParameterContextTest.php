@@ -67,6 +67,17 @@ it('converts to Parameter with all properties set', function () {
         ->and($parameter->openApiAttributes['default'])->toBe(20);
 });
 
+it('defaults the never-satisfiable flag to false and keeps it out of the Parameter', function () {
+    $context = new ParameterContext('locked', mock(DataProperty::class));
+
+    expect($context->neverSatisfiable)->toBeFalse();
+
+    $context->neverSatisfiable = true;
+
+    expect($context->toParameter()->toArray())->not->toHaveKey('neverSatisfiable')
+        ->and($context->toParameter()->openApiAttributes)->toBe([]);
+});
+
 it('converts to Parameter with minimal properties', function () {
     $property = mock(DataProperty::class);
 

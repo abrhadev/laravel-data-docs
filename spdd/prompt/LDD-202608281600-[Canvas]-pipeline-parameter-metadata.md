@@ -46,6 +46,7 @@ classDiagram
         +nullable bool~
         +onlyValidatedWhenPresent bool
         +presentAcceptsEmpty bool
+        +neverSatisfiable bool
         +location ParameterLocation~
         +description string
         +example mixed
@@ -139,7 +140,7 @@ Known divergences (codified as-is, not proposed fixes):
 - TypeStage can produce type `[]` (empty item type plus suffix). CustomTypeStage treats `[]` as a standard type and does not fall through to custom-type handling.
 - `TypeStage::setEnumInfo` swallows `TypeError` and leaves type/enumInfo unchanged for that path.
 - `DefaultValueDescriptionStage` skips when `context->default !== null` is false, so a documented default of PHP `null` never gets a “Defaults to” sentence even if `hasDefaultValue` is true.
-- Default-value description uses `property->defaultValue` for `UnitEnum` display but `context->default` for booleans, arrays, and objects.
+- Default-value description uses `property->defaultValue` for enum display (`BackedEnum` as name and value, `UnitEnum` as name) but `context->default` for booleans, arrays, and objects.
 - Scalar type detection walks `bool`, `int`, `float`, `string` and takes the first `acceptsType` hit, so overlapping acceptors follow that priority.
 - AttributeProcessingStage runs before TypeDescriptionStage, so type/enum sentences appear at the front of the final description even when attributes ran first.
 - Stage and pipeline classes carry no explanatory comments beyond those listed in Norms; `RequirementResolver` and `RequiredStage` are the requirement resolution canvas's deliberate exceptions.
@@ -194,8 +195,8 @@ Layering: this is a domain processing layer. It does not own HTTP, OpenAPI docum
 
 - Responsibility: accumulate documentation fields for one named property.
 - Constructor takes readonly `name` (string) and readonly `property` (`DataProperty`).
-- Defaults: `isHidden` false, nested/array flags false, `onlyValidatedWhenPresent` false, `presentAcceptsEmpty` false, `type`/`required`/`nullable`/`location`/`enumInfo`/`dataClass`/`format`/`pattern` and numeric constraints null, `description` empty string, `example` null, `default` null, `descriptions` empty array.
-- `onlyValidatedWhenPresent` and `presentAcceptsEmpty` are non-nullable bools (unlike `required`/`nullable`, which are nullable). They drive description text only and are deliberately absent from `toParameter()`, so they reach neither `Parameter` nor `openApiAttributes`.
+- Defaults: `isHidden` false, nested/array flags false, `onlyValidatedWhenPresent` false, `presentAcceptsEmpty` false, `neverSatisfiable` false, `type`/`required`/`nullable`/`location`/`enumInfo`/`dataClass`/`format`/`pattern` and numeric constraints null, `description` empty string, `example` null, `default` null, `descriptions` empty array.
+- `onlyValidatedWhenPresent`, `presentAcceptsEmpty` and `neverSatisfiable` are non-nullable bools (unlike `required`/`nullable`, which are nullable). They drive description text only and are deliberately absent from `toParameter()`, so they reach neither `Parameter` nor `openApiAttributes`.
 - `enumInfo` is written only by `TypeStage`.
 - Method `toParameter()` builds `Parameter` with defaults listed under Entities. `enumValues` is `enumInfo?->toArray()`. `openApiAttributes` includes default, format, min/max, exclusive min/max, pattern, length and items bounds, multipleOf, with nulls removed via `array_filter` using `!== null`.
 
@@ -252,7 +253,7 @@ Layering: this is a domain processing layer. It does not own HTTP, OpenAPI docum
 ### DefaultValueDescriptionStage
 
 - Responsibility: append a default sentence when `context->default` is not null.
-- Description text uses: `UnitEnum` from `property->defaultValue` → `name`; boolean `context->default` → `true`/`false` strings; array or object `context->default` → `json_encode`; otherwise the `context->default` value interpolated into `"Defaults to <code>{value}</code>."`
+- Description text uses: a `BackedEnum` `property->defaultValue` → `Defaults to <code>{name}</code> ({value}).`; `UnitEnum` from `property->defaultValue` → `name`; boolean `context->default` → `true`/`false` strings; array or object `context->default` → `json_encode`; otherwise the `context->default` value interpolated into `"Defaults to <code>{value}</code>."`
 - Append via `trim(existing + space + new)`.
 
 `RequiredStage`, `RequirementDescriptionStage`, `RequirementResolver` and `RequirementStatus` are specified in the requirement resolution canvas; `ExampleGenerationStage` in the example generation canvas.

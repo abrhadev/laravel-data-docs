@@ -2,7 +2,7 @@
 
 Family canvas for STORY-001-001 (`requirements/[User-story-1]conditional-requirement-validation-attributes.md`), plus `Filled` from STORY-001-000. Owns `RequiredIfProcessor`, `RequiredUnlessProcessor`, `RequiredWithProcessor`, `RequiredWithAllProcessor`, `RequiredWithoutProcessor`, `RequiredWithoutAllProcessor`, `Processors/Base/RequirementConditionProcessor`, and the registry rows `RequiredIf`, `RequiredUnless`, `RequiredWith`, `RequiredWithAll`, `RequiredWithout`, `RequiredWithoutAll`, `Filled`.
 
-Related canvases: attribute processing framework (`FieldReferenceProcessor`, `extractFieldName`, `code`, `fieldName`); pipeline canvases (`RequirementResolver` publishes a conditionally required property as optional and decides nullability; `RequirementDescriptionStage` writes the `Present` sentence).
+Related canvases: attribute processing framework (`ConditionProcessor`, `parametersOf`, `renderValues`, `fieldName`); pipeline canvases (`RequirementResolver` publishes a conditionally required property as optional and decides nullability; `RequirementDescriptionStage` writes the `Present` sentence).
 
 Provenance: created by `/spdd-reasons-canvas` from the analysis `spdd/analysis/GGQPA-XXX-202609222058-[Analysis]-conditional-requirement-attributes.md`.
 
@@ -16,18 +16,15 @@ Provenance: created by `/spdd-reasons-canvas` from the analysis `spdd/analysis/G
 
 ```mermaid
 classDiagram
-    class FieldReferenceProcessor {
+    class ConditionProcessor {
         <<abstract>>
     }
     class RequirementConditionProcessor {
         <<abstract>>
-        #parametersOf(object attribute) array~
-        #fieldNames(array references) string[]
-        #renderValues(array values) string~
         #suppressedBy(object attribute, ParameterContext) bool
         #appendSentence(object attribute, ParameterContext, string) void
     }
-    RequirementConditionProcessor --|> FieldReferenceProcessor
+    RequirementConditionProcessor --|> ConditionProcessor
     RequiredIfProcessor --|> RequirementConditionProcessor
     RequiredUnlessProcessor --|> RequirementConditionProcessor
     RequiredWithProcessor --|> RequirementConditionProcessor
@@ -53,15 +50,12 @@ Known divergences:
 
 ## Structure
 
-`Processors/Base/RequirementConditionProcessor.php` extends `FieldReferenceProcessor`; holds safe parameter reading, field-list rendering, value rendering, suppression and appending; imports Spatie `Present`, `Required`, the six conditional attributes, `Rule`, `RuleNormalizer` and `ValidationRule` for suppression, `ExternalReference` and `BackedEnum` for value rendering, and `Throwable`. The six processors extend it and import no upstream class.
+`Processors/Base/RequirementConditionProcessor.php` extends `ConditionProcessor`; holds suppression and appending; imports Spatie `Present`, `Required`, the six conditional attributes, `Rule`, `RuleNormalizer` and `ValidationRule` for suppression, and `Throwable`. The six processors extend it and import no upstream class.
 
 ## Operations
 
 ### RequirementConditionProcessor
 
-- `parametersOf(object $attribute): ?array`: `parameters()` inside a try, null on any `Throwable`. `RequiredWith`, `RequiredWithAll`, `RequiredWithout` and `RequiredWithoutAll` declare `$fields` with no default and fill it only inside a loop over the constructor arguments, so a declaration carrying no fields leaves it uninitialised and `parameters()` throws; a documentation build must not fail over one attribute. Its docblock states that defect.
-- `fieldNames(array $references): array`: maps `extractFieldName` over the `parameters()[0]` list the four presence-based attributes carry.
-- `renderValues(array $values): ?string`: null for an empty list, and null as soon as any element is an `ExternalReference`. Otherwise renders each element (`BackedEnum` by its backing value, `null` as the literal `null`, anything else cast to string), wraps each in `code()`, and joins: one value alone, several as `one of: a, b, c`.
 - `suppressedBy(object $attribute, ParameterContext $context): bool`: reads `property->attributes->all(ValidationRule::class)` — the same declaration-ordered list upstream walks — and finds `$attribute` in it by identity (`array_search` strict). Returns true when any later element is `instanceof Present`, or when any rule it expands to (see `expand`) is `instanceof` one of the private constant `REQUIRING_ATTRIBUTES` (`Required`, `RequiredIf`, `RequiredUnless`, `RequiredWith`, `RequiredWithAll`, `RequiredWithout`, `RequiredWithoutAll`). An attribute not found in the list (only possible when a caller passes an instance the property does not declare, as unit tests do) is treated as declared first, so any `Present` or requiring attribute on the property suppresses it. `DataAttributesCollection` indexes each attribute under its own class plus every interface and parent class, so a consumer subclass of `Present` is in the list and matched by `instanceof`, as it is upstream.
 - Private `expand(object $candidate): array`: a `Rule` becomes `app(RuleNormalizer::class)->execute($candidate)`, the rule objects upstream adds for it, inside a try that returns `[]` on any `Throwable`; anything else is returned as `[$candidate]`. A `Rule` is never tested as `Present`: upstream checks the declared attribute itself, so `#[Rule('present')]` does not strip a condition.
 - `appendSentence(object $attribute, ParameterContext $context, string $sentence): void`: appends to `descriptions[]` unless `suppressedBy($attribute, $context)`. Each processor passes the attribute it is processing.
@@ -69,7 +63,7 @@ Known divergences:
 
 ### Attributes
 
-`{field}` is rendered via `fieldName(extractFieldName(...))`, `{values}` via `renderValues`. Every conditional processor reads through `parametersOf` and appends through `appendSentence`, so every sentence below is subject to suppression. All write `descriptions[]` only.
+`{field}` is rendered via `fieldName(extractFieldName(...))`, `{values}` via the framework's `renderValues`. Every conditional processor reads through `parametersOf` and appends through `appendSentence`, so every sentence below is subject to suppression. All write `descriptions[]` only.
 
 | Attribute | Processor (base) | Reads / guards | Sentence | Requirement effect | Example rule |
 | --- | --- | --- | --- | --- | --- |
