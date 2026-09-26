@@ -7,11 +7,14 @@ use Abrha\LaravelDataDocs\Pipeline\ParameterPipeline;
 use Abrha\LaravelDataDocs\Pipeline\Stages\RequirementDescriptionStage;
 use Abrha\LaravelDataDocs\ValueObjects\ConfirmationCompanion;
 use Abrha\LaravelDataDocs\ValueObjects\Parameter;
+use Spatie\LaravelData\Contracts\BaseData;
 use Spatie\LaravelData\Support\DataConfig;
+use Spatie\LaravelData\Support\DataProperty;
 
 /**
- * A property carrying #[Confirmed] may yield a second, synthesised parameter
- * for its confirmation field. Its required, nullable, location, type,
+ * A property whose documented rules include Confirmed (declared, or expanded
+ * from a #[Rule('confirmed')] string) may yield a second, synthesised parameter
+ * for its confirmation field, in a request only. Its required, nullable, location, type,
  * enumValues, example and openApiAttributes (minus default) are copied from the
  * source's finished parameter. This is the only requirement decision made
  * outside RequiredStage, and it infers nothing: the companion has no property
@@ -19,14 +22,21 @@ use Spatie\LaravelData\Support\DataConfig;
  */
 final class ParameterGenerator
 {
+    /**
+     * Laravel Data reads a request under each property's input name and writes
+     * a response under its output name (#[MapName], #[MapInputName],
+     * #[MapOutputName] or a class-level mapper), so parameters are published
+     * under the name the direction uses.
+     */
     public function __construct(
         private readonly ParameterPipeline $pipeline,
         private readonly DataConfig $dataConfig,
+        private readonly bool $outputNames = false,
     ) {}
 
     public function __invoke(string $className): array
     {
-        if (!class_exists($className)) {
+        if (!is_a($className, BaseData::class, true)) {
             return [];
         }
 
@@ -42,10 +52,10 @@ final class ParameterGenerator
 
         $parameters = [];
 
-        $declaredNames = array_map(fn($property) => $property->name, $dataClass->properties->all());
+        $declaredNames = array_map(fn($property) => $this->publishedName($property), $dataClass->properties->all());
 
         foreach ($dataClass->properties as $property) {
-            $propertyName = $property->name;
+            $propertyName = $this->publishedName($property);
             $fullName = $prefix ? "$prefix.$propertyName" : $propertyName;
 
             $context = new ParameterContext(
@@ -64,6 +74,7 @@ final class ParameterGenerator
 
             $companion = $context->confirmationCompanion;
             if ($companion !== null
+                && !$this->outputNames
                 && !$context->hasNestedParameters
                 && !$context->hasArrayParameters
                 && !in_array($companion->name, $declaredNames, true)) {
@@ -79,6 +90,11 @@ final class ParameterGenerator
         }
 
         return $parameters;
+    }
+
+    private function publishedName(DataProperty $property): string
+    {
+        return ($this->outputNames ? $property->outputMappedName : $property->inputMappedName) ?? $property->name;
     }
 
     private function companionParameter(string $name, Parameter $source, ConfirmationCompanion $companion): Parameter

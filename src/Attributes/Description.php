@@ -5,10 +5,12 @@ namespace Abrha\LaravelDataDocs\Attributes;
 use Attribute;
 
 /**
- * Adds one or more custom description strings to a parameter in API documentation.
+ * Adds one or more custom description strings to a parameter or endpoint in API documentation.
  *
- * Descriptions follow the generated type sentence and precede the validation
- * and requirement sentences, wherever the attribute is declared.
+ * On Data properties, descriptions follow the generated type sentence and any #[In] / #[NotIn]
+ * value sentences, and precede the other validation and requirement sentences, wherever the
+ * attribute is declared.
+ * On controller methods, they set the Scribe endpoint description and may be used alongside ResponseData.
  * The attribute is repeatable and accepts one or more strings.
  *
  * @example
@@ -25,9 +27,16 @@ use Attribute;
  *     #[Description('Line B')]
  *     public string $notes;
  * }
+ *
+ * class UserController
+ * {
+ *     #[Description('Fetch a user by id.')]
+ *     #[ResponseData(UserResponse::class)]
+ *     public function show(int $id) {}
+ * }
  * ```
  */
-#[Attribute(Attribute::TARGET_PROPERTY | Attribute::IS_REPEATABLE)]
+#[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_METHOD | Attribute::IS_REPEATABLE)]
 class Description implements DataDocsAttribute
 {
     public readonly array $descriptions;

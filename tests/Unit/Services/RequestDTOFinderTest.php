@@ -33,6 +33,16 @@ it('returns null when no data class is found', function () {
     expect($result)->toBeNull();
 });
 
+it('finds a Dto, which Laravel Data validates and injects too', function () {
+    $result = RequestDTOFinder::getInstance()(new ReflectionMethod(RequestDTOFinderTestController::class, 'fromDto'));
+
+    expect($result?->getName())->toBe(RequestDTOFinderTestDto::class);
+});
+
+it('ignores a Resource, which is output only', function () {
+    expect(RequestDTOFinder::getInstance()(new ReflectionMethod(RequestDTOFinderTestController::class, 'fromResource')))->toBeNull();
+});
+
 it('ignores union types', function () {
     $method = new ReflectionMethod(RequestDTOFinderTestController::class, 'updateWithUnion');
     $finder = RequestDTOFinder::getInstance();
@@ -69,8 +79,28 @@ class NonDataClass
     public function __construct(public string $value) {}
 }
 
+class RequestDTOFinderTestDto extends Spatie\LaravelData\Dto
+{
+    public function __construct(public string $name) {}
+}
+
+class RequestDTOFinderTestResource extends Spatie\LaravelData\Resource
+{
+    public function __construct(public string $name) {}
+}
+
 class RequestDTOFinderTestController
 {
+    public function fromDto(RequestDTOFinderTestDto $dto)
+    {
+        return $dto;
+    }
+
+    public function fromResource(RequestDTOFinderTestResource $resource)
+    {
+        return $resource;
+    }
+
     public function store(TestRequestData $request)
     {
         return $request;

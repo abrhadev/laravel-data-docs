@@ -5,7 +5,7 @@ namespace Abrha\LaravelDataDocs\Services;
 use ReflectionClass;
 use ReflectionFunctionAbstract;
 use ReflectionNamedType;
-use Spatie\LaravelData\Data;
+use Spatie\LaravelData\Contracts\ValidateableData;
 
 final class RequestDTOFinder
 {
@@ -46,7 +46,9 @@ final class RequestDTOFinder
 
             $parameterClass = new ReflectionClass($parameterClassName);
 
-            if ($parameterClass->isSubclassOf(Data::class)) {
+            // Laravel Data validates and injects any of these from the request
+            // (Data and Dto), not a Resource, which is output only.
+            if ($parameterClass->implementsInterface(ValidateableData::class)) {
                 return $parameterClass;
             }
         }

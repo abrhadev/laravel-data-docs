@@ -7,7 +7,7 @@ Related canvases: pipeline canvases (fills most fields via `ParameterContext::to
 ## Requirements
 
 - Carry a finished parameter’s documentation fields as a transferable record after the pipeline, independent of Spatie `DataProperty`.
-- Represent OpenAPI-ish extras (default, format, bounds, pattern, multipleOf) as a side bag that the package's OpenAPI generator merges into each field's schema (package + OpenAPI glue canvas), rather than Scribe merging it later.
+- Represent OpenAPI-ish extras (default, format, bounds, pattern, multipleOf) as a side bag that the package's OpenAPI generator merges, for request and response fields (package + OpenAPI glue canvas; it holds exclusive bounds in the numeric 3.1 form, which the glue converts for 3.0), rather than Scribe merging it later.
 - Distinguish query vs body placement for filtering, without requiring that placement to appear in the Scribe array payload.
 - Describe enums for both documentation text (elsewhere) and example/enum lists via a typed case list, and carry a field's documented allowed-value list as `enumValues`: the enum's case names or backing values, or else the `#[In]` values the field's pattern rules, its registered offline format rules (email, URL, UUID, IP, JSON, date, date format, password, accepted, declined; a boolean value checked as `true`/`false`) and its length, numeric and divisor bounds also accept (rules that need the network, `active_url`, `email:dns` and `uncompromised`, and a password's custom rules, excepted; attributes the package does not register narrow nothing), typed to the field.
 - Represent project custom-type config as a readonly constraint bag constructed from a PHP array.
@@ -88,7 +88,7 @@ classDiagram
 
 All of these types are `final` classes or backed/unit enums under `Abrha\LaravelDataDocs\ValueObjects`. `Parameter` properties are public and writable after construction. The other classes use readonly constructor properties; `ConfirmationCompanion` is a `final readonly class`.
 
-`ConfirmationCompanion` comes from STORY-001-003 (analysis `spdd/analysis/GGQPA-XXX-202609251435-[Analysis]-cross-field-comparison-acceptance-attributes.md`). `ConfirmedProcessor` (cross-field and acceptance canvas) produces it and stores it on `ParameterContext::$confirmationCompanion`; `ParameterGenerator` (DTO extraction canvas) consumes it to emit the companion `Parameter`. It never reaches `Parameter` or Scribe itself.
+`ConfirmationCompanion` comes from STORY-001-003 (analysis `spdd/analysis/GGQPA-XXX-202609251435-[Analysis]-cross-field-comparison-acceptance-attributes.md`). `ConfirmedProcessor` (cross-field and acceptance canvas) produces it and stores it on `ParameterContext::$confirmationCompanion`; `ParameterGenerator` (DTO extraction canvas) consumes it to emit the companion `Parameter`. It never reaches `Parameter` or Scribe itself. The change canvas that introduced it was folded back into the four owning canvases, then removed; git history keeps it.
 
 ## Approach
 

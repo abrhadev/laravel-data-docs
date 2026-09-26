@@ -39,7 +39,9 @@ return [
         
         // IMPORTANT: Add the extended OpenAPI generator to properly merge
         // validation rules, formats, patterns, and other OpenAPI properties
-        // extracted from Laravel Data attributes into the final specification
+        // extracted from Laravel Data attributes into the final specification.
+        // It rebuilds each path item, so list any other generator that edits
+        // path items (parameters, requestBody, responses, ...) after it.
         'generators' => [
             \Abrha\LaravelDataDocs\OpenApi\ExtendedOpenApiGenerator::class,
         ],
@@ -53,6 +55,12 @@ return [
         'queryParameters' => [
             \Abrha\LaravelDataDocs\Strategies\QueryParameters\GetFromRequestDTOStrategy::class,
             // ... other strategies
+        ],
+        'metadata' => [
+            // ... other strategies
+            // Must come last: Scribe keeps the last non-empty 'description',
+            // so this lets #[Description] win over a method docblock.
+            \Abrha\LaravelDataDocs\Strategies\Metadata\GetFromDescriptionAttribute::class,
         ],
         'responseFields' => [
             \Abrha\LaravelDataDocs\Strategies\ResponseDataStrategy::class,
@@ -188,10 +196,11 @@ class ProductData extends Data
 
 ### `#[Description]`
 
-Adds one or more custom description strings to a parameter. These are appended after the generated type sentence and any `#[In]` / `#[NotIn]` value sentences, and before the other validation and requirement sentences, wherever the attribute is declared. The attribute is repeatable and accepts one or more strings.
+Adds one or more custom description strings. On Data properties, they are appended after the generated type sentence and any `#[In]` / `#[NotIn]` value sentences, and before the other validation and requirement sentences, wherever the attribute is declared. On controller methods, they set the Scribe endpoint description and can be used next to `#[ResponseData]`. The attribute is repeatable and accepts one or more strings.
 
 ```php
 use Abrha\LaravelDataDocs\Attributes\Description;
+use Abrha\LaravelDataDocs\Attributes\ResponseData;
 
 class UserData extends Data
 {
@@ -207,11 +216,21 @@ class UserData extends Data
         public string $notes,
     ) {}
 }
+
+class UserController
+{
+    #[Description('Fetch a user by id.')]
+    #[ResponseData(UserResponse::class)]
+    public function show(int $id)
+    {
+        return UserResponse::from(User::findOrFail($id));
+    }
+}
 ```
 
 ### `#[QueryParameter]`
 
-Marks a property as a URL query parameter (for non-GET requests). GET requests treat all parameters as query parameters by default.
+Marks a property as a URL query parameter instead of a body parameter. On a GET request with no property marked, every property is a query parameter; once one is marked, unmarked properties stay in the body.
 
 ```php
 use Abrha\LaravelDataDocs\Attributes\QueryParameter;
@@ -239,10 +258,12 @@ class SearchRequest extends Data
 Specifies the response DTO class for a controller method. Applied to controller methods, not Data classes.
 
 ```php
+use Abrha\LaravelDataDocs\Attributes\Description;
 use Abrha\LaravelDataDocs\Attributes\ResponseData;
 
 class PostController extends Controller
 {
+    #[Description('List posts.')]
     #[ResponseData(PostResponse::class)]
     public function index()
     {
@@ -426,13 +447,15 @@ return [
 - `format`: OpenAPI format (uuid, email, date-time, etc.)
 - `minimum`: Minimum value for numbers
 - `maximum`: Maximum value for numbers
-- `exclusiveMinimum`: Exclusive minimum value
-- `exclusiveMaximum`: Exclusive maximum value
+- `exclusiveMinimum`: Exclusive minimum value (published as `minimum` plus `exclusiveMinimum: true` on OpenAPI 3.0)
+- `exclusiveMaximum`: Exclusive maximum value (likewise)
 - `minLength`: Minimum string length
 - `maxLength`: Maximum string length
 - `minItems`: Minimum array items
 - `maxItems`: Maximum array items
 - `multipleOf`: Number must be multiple of this value
+
+On an array type (`string[]`), `pattern`, `format`, the length bounds and the numeric bounds constrain each item and are published under `items`; `minItems` and `maxItems` apply to the array.
 
 `type` and `descriptions` are required. Every bound must be an integer (an integral float such as `5.0` or a numeric string such as `'5'` is accepted); a length or item count must not be negative, and `multipleOf` must be greater than zero. Anything else throws an `InvalidArgumentException` naming the key when the documentation is generated.
 
@@ -473,7 +496,7 @@ public function register()
 }
 ```
 
-A processor should set `type` to an OpenAPI type (`string`, `integer`, `number`, `boolean`, `object`, or one of them with `[]`); any other value, including the class name, `array` or `file`, is published as a `string` (or `string[]`). The lookup matches the property's type exactly, so an array of `Ulid` (`Ulid[]`) is a separate key: register a processor for `Ulid::class . '[]'` too, and have it set an array type and an array example (it receives the class name, so one processor can branch on `str_ends_with($className, '[]')`). A `pattern` a processor sets is published as written, so write it as an ECMA-262 regex without delimiters; it also decides which `#[In]` values are published as allowed (the pattern is left out when one of those values fails it).
+A processor should set `type` to an OpenAPI type (`string`, `integer`, `number`, `boolean`, `object`, or one of them with `[]`); any other value, including the class name, `array` or `file`, is published as a `string` (or `string[]`). The lookup matches the property's type exactly, so an array of `Ulid` (`Ulid[]`) is a separate key: register a processor for `Ulid::class . '[]'` too, and have it set an array type and an array example (it receives the class name, so one processor can branch on `str_ends_with($className, '[]')`). A `pattern` a processor sets is published as written, so write it as an ECMA-262 regex without delimiters; it also decides which `#[In]` values are published as allowed (the pattern is left out when one of those values fails it), and on an array type it is published under `items`.
 
 **When to use:** When you need programmatic control over type documentation or need to generate dynamic examples/descriptions based on the class itself.
 
@@ -637,12 +660,15 @@ The package uses a pipeline pattern to process each property in your Data classe
 
 ### Scribe Integration
 
-The package provides three Scribe strategies and an OpenAPI generator:
+The package provides four Scribe strategies and an OpenAPI generator:
 
 - **BodyParameters Strategy**: Extracts request body parameters from Data classes
 - **QueryParameters Strategy**: Extracts query parameters (GET requests or properties marked with `#[QueryParameter]`)
 - **ResponseData Strategy**: Extracts response structure from Data classes marked with `#[ResponseData]`
-- **ExtendedOpenApiGenerator**: Merges custom OpenAPI schema information (default values, formats, patterns, etc.) extracted from Laravel Data attributes into the generated OpenAPI specification
+- **Metadata Strategy** (`GetFromDescriptionAttribute`): Sets the endpoint description from `#[Description]` on the controller method
+- **ExtendedOpenApiGenerator**: Merges custom OpenAPI schema information (default values, formats, patterns, etc.) extracted from Laravel Data attributes into the generated OpenAPI specification, for request and response fields, in the shape of the configured `openapi.version` (3.0 or 3.1)
+
+Parameters are published under the names Laravel Data reads and writes, so `#[MapName]`, `#[MapInputName]`, `#[MapOutputName]` and class-level mappers are honoured.
 
 These strategies automatically detect Data classes in your controller methods and generate comprehensive documentation with validation rules.
 

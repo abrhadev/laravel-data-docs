@@ -14,6 +14,7 @@ use Attribute;
  *
  * @example
  * ```php
+ * #[Description('Fetch a user by id.')]
  * #[ResponseData(UserResponse::class)]
  * public function show(User $user)
  * {

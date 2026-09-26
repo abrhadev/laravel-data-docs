@@ -6,10 +6,10 @@ Related canvases: parameter metadata pipeline (process, `toParameter`, nested fl
 
 ## Requirements
 
-- Walk a Spatie Laravel Data class and produce a name-keyed map of `Parameter` records, including nested object and object-array properties under dotted (and `[]`) names.
+- Walk a Spatie Laravel Data class and produce a name-keyed map of `Parameter` records, including nested object and object-array properties under dotted (and `[]`) names. Names are the ones Laravel Data uses on the wire: a request property's input name and a response property's output name (`#[MapName]`, `#[MapInputName]`, `#[MapOutputName]`, a class-level mapper), falling back to the property name.
 - Skip hidden properties and do not recurse into them.
 - Publish the confirmation field a property implies as a real parameter when its documented rules include `Confirmed`, declared or expanded from a `#[Rule('confirmed')]` string, directly after its source, indistinguishable from a declared one to consumers and code generators.
-- Find the first controller/method parameter whose type is a subclass of Spatie `Data`.
+- Find the first controller/method parameter whose type Laravel Data validates and injects from the request: an implementation of Spatie's `ValidateableData` (`Data` and `Dto`, not the output-only `Resource`).
 - Split a Parameter list into query vs body for a given HTTP method, with a GET special case when no property was marked query.
 
 ## Entities
@@ -19,7 +19,9 @@ classDiagram
     class ParameterGenerator {
         -pipeline ParameterPipeline
         -dataConfig DataConfig
+        -outputNames bool
         +__invoke(string className) array
+        -publishedName(DataProperty property) string
         -extractParameters(string className, string prefix) array
         -companionParameter(string name, Parameter source, ConfirmationCompanion companion) Parameter
     }
@@ -38,7 +40,8 @@ classDiagram
     ParameterGenerator ..> Parameter : emits source, then companion
     ParameterGenerator ..> RequirementDescriptionStage : reuses NULLABLE_SENTENCE
     ParameterFilter --> Parameter : documentation records
-    RequestDTOFinder ..> Data : Spatie
+    RequestDTOFinder ..> ValidateableData : Spatie
+    ParameterGenerator ..> BaseData : Spatie, guard only
 ```
 
 ## Approach
@@ -53,14 +56,14 @@ ParameterGenerator constructs a new `ParameterContext` per property and discards
 
 The companion's description is not the source's (which would repeat the source's constraint sentences and its "A matching … value must be sent with it."). It is up to three sentences joined with single spaces, empty entries skipped: the recorded match sentence; the recorded "Required when … is sent." only when the source is not required; and `RequirementDescriptionStage::NULLABLE_SENTENCE` only when the source is nullable. There is no type sentence: the type is in the schema, and "must match" binds it to the source. The value-set sentences (`#[In]`, `#[NotIn]`) are not repeated either: the `#[In]` set is copied as `enumValues`, and "must match" binds the `#[NotIn]` one.
 
-**Provenance.** Companion emission comes from STORY-001-003 (analysis `spdd/analysis/GGQPA-XXX-202609251435-[Analysis]-cross-field-comparison-acceptance-attributes.md`).
+**Provenance.** Companion emission comes from STORY-001-003 (analysis `spdd/analysis/GGQPA-XXX-202609251435-[Analysis]-cross-field-comparison-acceptance-attributes.md`). It was designed in a change canvas that spanned this canvas and the former attribute processors, pipeline and documentation records canvases, was folded back into all four, and was then removed; git history keeps it.
 
 Known divergences:
 
-- RequestDTOFinder returns the first matching Data subclass, not the one that is a “request” DTO by name.
+- RequestDTOFinder returns the first parameter type that implements `ValidateableData` (`Data` or `Dto`), not the one that is a “request” DTO by name.
 - Union/intersection parameter types are skipped (`ReflectionNamedType` only).
 - ParameterFilter GET special case: if the method list is exactly one element `GET` and no parameter has QUERY location, query extraction receives all parameters and body extraction receives none. Non-GET always filters by location only (default location BODY from `toParameter`).
-- ParameterGenerator returns empty array if `class_exists` is false; `getDataClass` errors are not caught. Nested recursion can throw `ReflectionException` (docblock on `extractParameters` only).
+- ParameterGenerator returns empty array for a class that does not exist or is not a Laravel Data class (`is_a(…, BaseData::class, true)`, so `Data`, `Dto` and `Resource` all count); `getDataClass` errors are not caught. Nested recursion can throw `ReflectionException` (docblock on `extractParameters` only).
 - Nested prefix for arrays is `parentName[]` then `.child`: array children are named `items[].id` only; no `items.id` alias is published.
 - The companion carries no type sentence ("Must be a string."); its type is published in the schema.
 - A custom companion name a `Confirmed` subclass reports as a plain string (`parameters(): ['repeat']`) is published under the source's prefix (`profile.repeat`), while Laravel reads that name from the root of the data, so the documented contract fails for such a nested declaration; a name reported as a `FieldReference` is resolved against the path by Spatie and is published correctly (cross-field acceptance canvas).
@@ -73,22 +76,23 @@ Known divergences:
 
 ## Structure
 
-`src/Services/`. No dependencies between the three classes. Strategies wire them together. ParameterGenerator additionally depends on `ValueObjects\ConfirmationCompanion`, `ValueObjects\Parameter` and `Pipeline\Stages\RequirementDescriptionStage` (for its public `NULLABLE_SENTENCE` only).
+`src/Services/`. No dependencies between the three classes. Strategies wire them together. ParameterGenerator additionally depends on `ValueObjects\ConfirmationCompanion`, `ValueObjects\Parameter`, `Pipeline\Stages\RequirementDescriptionStage` (for its public `NULLABLE_SENTENCE` only) and Spatie's `Contracts\BaseData` (the root-class guard); RequestDTOFinder on Spatie's `Contracts\ValidateableData`.
 
 ## Operations
 
 ### ParameterGenerator
 
-- Constructor: `ParameterPipeline`, Spatie `DataConfig`.
-- `__invoke(string $className): array`: if class does not exist, return `[]`; else `extractParameters(className, prefix '')`.
-- `extractParameters(className, prefix)`: load data class from DataConfig; before the loop, collect `declaredNames`, the bare names of every property of that class (hidden or not); foreach property, fullName is `prefix.propertyName` or just `propertyName` when prefix is empty; new ParameterContext(fullName, property); pipeline process; if `isHidden`, continue (no map entry, no companion, no recurse); else store `parameters[fullName] = context->toParameter()`; then, directly after the source and before any recursion, emit the companion when all three hold:
+- `__invoke(string $className): array`: if the class is not a `Spatie\LaravelData\Contracts\BaseData` (missing, or a plain class), return `[]`; else `extractParameters(className, prefix '')`.
+- Constructor: `ParameterPipeline $pipeline`, Spatie `DataConfig $dataConfig`, and `bool $outputNames = false`; the request strategies leave it false, `ResponseDataStrategy` passes `outputNames: true` (Scribe strategies canvas). Its docblock states why the direction decides the name.
+- Private `publishedName(DataProperty $property): string`: `outputMappedName` when `outputNames`, else `inputMappedName`, falling back to `$property->name`. Spatie computes both, class-level mappers included.
+- `extractParameters(className, prefix)`: load data class from DataConfig; before the loop, collect `declaredNames`, the published names (`publishedName`) of every property of that class (hidden or not); foreach property, fullName is `prefix.propertyName` or just `propertyName` when prefix is empty, where `propertyName` is `publishedName(property)`; new ParameterContext(fullName, property); pipeline process; if `isHidden`, continue (no map entry, no companion, no recurse); else store `parameters[fullName] = context->toParameter()`; then, directly after the source and before any recursion, emit the companion, unless `outputNames` is set, when all three hold:
   1. `context->confirmationCompanion` is not null;
   2. neither `hasNestedParameters` nor `hasArrayParameters` is set on the source;
   3. the companion's bare name is not in `declaredNames` (strict `in_array`), whether that property is `#[Hidden]` or not. The explicit check is required because assigning an existing array key would keep its earlier position.
 
   Its key uses the same join as the source, `prefix.name` or `name` when prefix is empty, so `profile.password` yields `profile.password_confirmation` and `users[].password` yields `users[].password_confirmation`; `parameters[key] = companionParameter(key, sourceParameter, companion)`. Then, if hasNestedParameters or hasArrayParameters, recurse with `dataClass` and prefix `fullName` plus `[]` when hasArrayParameters, then array_merge nested into the map (later keys overwrite earlier on collision).
 - Private `companionParameter(string $name, Parameter $source, ConfirmationCompanion $companion): Parameter`: `description` is `implode(' ', array_filter([matchSentence, source->required ? '' : requiredWhenSentSentence, source->nullable ? RequirementDescriptionStage::NULLABLE_SENTENCE : '']))`. Returns a new `Parameter` with that name and description, and `type`, `required`, `nullable`, `location`, `example` and `enumValues` from the source, and `openApiAttributes` = `array_diff_key(source->openApiAttributes, ['default' => true])`. Performs no I/O and builds no markup of its own; it only joins sentences it receives.
-- Class docblock: a `#[Confirmed]` property may yield a second, synthesised parameter whose `required`, `nullable`, `location`, `type`, `enumValues`, `example` and `openApiAttributes` (minus `default`) are copied from the source's finished parameter; this is the only requirement decision made outside `RequiredStage`, and it infers nothing, because the companion has no property for the resolver to read and `confirmed` runs only when the source does. It is the only comment in the class besides the `@throws` on `extractParameters`.
+- Class docblock: a property whose documented rules include `Confirmed` (declared, or expanded from a `#[Rule('confirmed')]` string) may yield a second, synthesised parameter, in a request only, whose `required`, `nullable`, `location`, `type`, `enumValues`, `example` and `openApiAttributes` (minus `default`) are copied from the source's finished parameter; this is the only requirement decision made outside `RequiredStage`, and it infers nothing, because the companion has no property for the resolver to read and `confirmed` runs only when the source does. It, the constructor docblock and the `@throws` on `extractParameters` are the only comments in the class.
 
 ### ParameterFilter
 
@@ -100,7 +104,7 @@ Known divergences:
 ### RequestDTOFinder
 
 - Singleton: private constructor (empty), private clone, `__wakeup` throws `Cannot unserialize singleton`, `getInstance`.
-- `__invoke(ReflectionFunctionAbstract $method): ?ReflectionClass`: foreach method parameters, skip if type is not ReflectionNamedType; skip if class does not exist; reflect class; if `isSubclassOf(Data::class)` return that ReflectionClass. Otherwise null after the loop. Does not treat Data itself as a match (subclass only).
+- `__invoke(ReflectionFunctionAbstract $method): ?ReflectionClass`: foreach method parameters, skip if type is not ReflectionNamedType; skip if class does not exist; reflect class; if the class implements `ValidateableData`, return it (a short comment names `Data` and `Dto` and why a `Resource` is not one).
 
 ## Norms
 
@@ -111,12 +115,15 @@ Known divergences:
 
 ## Safeguards
 
+- Every published request key other than a confirmation companion is, after mapping `[]` to `.*`, a key Laravel Data validates, and every response key one it writes, under name mapping too. `tests/Integration/NameMappingTest.php` compares the published names with `getValidationRules` (property- and class-level mapping, a nested Data object, a mapped array of Data objects, a confirmation companion) and with `toArray()` output names.
+
 - Hidden properties are omitted and not recursed. A hidden source has no companion, because the hidden `continue` runs before emission.
 - A companion never duplicates a key: it is not emitted when a property of the same Data class has its bare name, hidden or not, so at most one parameter exists per key. It is never emitted for a nested or array Data source.
 - A companion always sits directly after its source key. `CrossFieldComparisonTest` pins the root, nested (`profile.`) and array (`users[].`) cases, a companion from a `#[Rule('confirmed')]` string, and that the last key is still the last declared property.
 - The companion's `required` and `nullable` are copied from the source's resolved parameter, never inferred; for every declared property requirement is still decided by `RequiredStage` alone. `CrossFieldComparisonTest` pins a required and a nullable source (AC11), and the example copy over five generations (AC12).
-- Properties whose documented rules include no `Confirmed` get no extra parameter, and key order is unchanged; the pre-existing tests in `tests/Integration/ParameterGeneratorTest.php` pass unmodified (later additions only add cases).
-- A missing root class yields `[]`, not an exception.
+- Properties whose documented rules include no `Confirmed` get no extra parameter, and key order is unchanged; the pre-existing tests in `tests/Integration/ParameterGeneratorTest.php` pass unmodified (later additions only add cases). Names follow the name-mapping safeguard above.
+- A missing root class, or one that is not a Laravel Data class, yields `[]`, not an exception.
+- A response (`outputNames: true`) never gets a confirmation companion: the confirmation is a request field. `NameMappingTest` pins it. The source's own sentence remains, as every request sentence does on a response (Scribe strategies canvas).
 - GET with mixed query-marked and unmarked fields: unmarked BODY defaults are dropped from the query strategy and kept only if a body strategy runs (body strategy is typically not used for GET by Scribe config — that wiring is outside this canvas).
 - Filter does not convert arrays of `toArray()` hashes; it requires `Parameter` instances.
 - Finder does not scan return types or attributes; only method parameters.

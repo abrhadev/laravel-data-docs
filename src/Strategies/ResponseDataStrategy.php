@@ -5,10 +5,11 @@ namespace Abrha\LaravelDataDocs\Strategies;
 use Abrha\LaravelDataDocs\Attributes\ResponseData;
 use Abrha\LaravelDataDocs\Pipeline\PipelineFactory;
 use Abrha\LaravelDataDocs\Services\ParameterGenerator;
-use Exception;
 use Knuckles\Camel\Extraction\ExtractedEndpointData;
 use Knuckles\Scribe\Extracting\Strategies\Strategy;
+use ReflectionAttribute;
 use Spatie\LaravelData\Support\DataConfig;
+use Throwable;
 
 class ResponseDataStrategy extends Strategy
 {
@@ -22,7 +23,8 @@ class ResponseDataStrategy extends Strategy
 
         $parameterGenerator = new ParameterGenerator(
             PipelineFactory::createDefault(config('data-docs', [])),
-            app(DataConfig::class)
+            app(DataConfig::class),
+            outputNames: true,
         );
 
         return array_map(fn($param) => $param->toArray(), $parameterGenerator($responseDtoClass));
@@ -31,7 +33,7 @@ class ResponseDataStrategy extends Strategy
     private function getResponseDtoClass(ExtractedEndpointData $endpointData): ?string
     {
         try {
-            $attributes = $endpointData->method?->getAttributes(ResponseData::class);
+            $attributes = $endpointData->method?->getAttributes(ResponseData::class, ReflectionAttribute::IS_INSTANCEOF);
 
             if (empty($attributes)) {
                 return null;
@@ -40,7 +42,7 @@ class ResponseDataStrategy extends Strategy
             $responseTypeAttribute = $attributes[0]->newInstance();
 
             return $responseTypeAttribute->dtoClass;
-        } catch (Exception) {
+        } catch (Throwable) {
             return null;
         }
     }

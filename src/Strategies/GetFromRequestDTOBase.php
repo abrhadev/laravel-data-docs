@@ -18,7 +18,7 @@ class GetFromRequestDTOBase extends Strategy
 
     public function __invoke(ExtractedEndpointData $endpointData, array $settings = []): ?array
     {
-        $dtoClass = RequestDTOFinder::getInstance()($endpointData->method);
+        $dtoClass = $endpointData->method === null ? null : RequestDTOFinder::getInstance()($endpointData->method);
 
         if (!$dtoClass) {
             return [];

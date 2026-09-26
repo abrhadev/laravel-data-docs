@@ -2,12 +2,13 @@
 
 Core canvas. Owns `src/Attributes/**`, `DescriptionProcessor`, `ExampleProcessor`, `QueryParameterProcessor`, and the registry rows `Description`, `Example`, `QueryParameter`.
 
-Related canvases: pipeline canvases (`Hidden` is read by HiddenStage, not by processors); attribute processing framework (`AttributeProcessor`, registry); documentation records (`ParameterLocation`); Scribe strategies (`ResponseData` on controller methods).
+Related canvases: pipeline canvases (`Hidden` is read by HiddenStage, not by processors); attribute processing framework (`AttributeProcessor`, registry); documentation records (`ParameterLocation`); Scribe strategies (`ResponseData` and method-level `Description`).
 
 ## Requirements
 
 - Let Data-class authors mark properties to hide, describe, exemplify, or place in the query string.
 - Let controller authors name a response Data class for documentation.
+- Let controller authors attach endpoint description text with the same `Description` attribute used on Data properties, including next to `ResponseData`.
 - Give the pipeline a marker type so property-level docs attributes can be collected together.
 
 ## Entities
@@ -43,7 +44,7 @@ Three processors in `Abrha\LaravelDataDocs\AttributeProcessing\Processors` turn 
 
 ## Approach
 
-Marker and payload attributes. `DataDocsAttribute` is an empty interface. AttributeProcessingStage collects property attributes of that interface. Hidden is also a `DataDocsAttribute` but is handled earlier by HiddenStage via class presence, and has no registry processor. ResponseData targets methods, so the property pipeline never sees it.
+Marker and payload attributes. `DataDocsAttribute` is an empty interface. AttributeProcessingStage collects property attributes of that interface. Hidden is also a `DataDocsAttribute` but is handled earlier by HiddenStage via class presence, and has no registry processor. ResponseData targets methods, so the property pipeline never sees it. Description targets both properties and methods; only property instances reach DescriptionProcessor. Method instances are read by `GetFromDescriptionAttribute`.
 
 Docblocks on these classes include usage examples and PHP code fences. That is source-as-is; this canvas does not treat those comments as runtime behavior.
 
@@ -53,9 +54,8 @@ Known divergences:
 
 - `Hidden` implements `DataDocsAttribute` but is not registered in `AttributeProcessorRegistry`.
 - `ResponseData` implements `DataDocsAttribute` but uses `TARGET_METHOD`.
-- `Description` is repeatable and accepts variadic strings in one instance.
-- `DataDocsAttribute`’s class docblock claims implementors are automatically recognized by AttributeProcessingStage. That is false for Hidden (HiddenStage) and ResponseData (method-only).
-- The `QueryParameter` docblock and the README say that a GET request treats every property as a query parameter by default. `ParameterFilter` does that only while no property is marked; once one is marked, unmarked properties stay in the body (DTO extraction canvas).
+- `Description` is repeatable, accepts variadic strings in one instance, and targets both properties and methods.
+- `DataDocsAttribute`’s class docblock claims implementors are automatically recognized by AttributeProcessingStage. That is false for Hidden (HiddenStage), ResponseData (method-only), and method-level Description (`GetFromDescriptionAttribute`).
 
 ## Structure
 
@@ -77,9 +77,9 @@ The three processors live in `src/AttributeProcessing/Processors/` beside the fa
 
 ### Description
 
-- PHP attribute: `TARGET_PROPERTY` and `IS_REPEATABLE`.
+- PHP attribute: `TARGET_PROPERTY`, `TARGET_METHOD`, and `IS_REPEATABLE`.
 - Constructor: variadic `string ...$descriptions` stored in readonly `descriptions` array (may be empty if called with no strings).
-- Class docblock states the placement: custom text follows the generated type sentence and precedes the validation and requirement sentences, wherever the attribute is declared. It also follows any `#[In]` / `#[NotIn]` value sentences, which `TypeDescriptionStage` writes together with the type sentence (parameter metadata pipeline canvas); the docblock does not name them. That holds because `TypeDescriptionStage` runs after `AttributeProcessingStage` and prepends the type sentence, `AttributeProcessingStage` processes `DataDocsAttribute` instances before Spatie validation rules, and the requirement sentences are appended later by the pipeline. A custom type's sentences, appended earlier by `CustomTypeStage`, come before the `Description` text. `README.md` states the order for the type and validation sentences only; it does not mention the requirement sentences, the value sentences or a custom type's sentences.
+- Class docblock states the placement on Data properties: custom text follows the generated type sentence and any `#[In]` / `#[NotIn]` value sentences, which `TypeDescriptionStage` writes together with the type sentence (parameter metadata pipeline canvas), and precedes the other validation and requirement sentences, wherever the attribute is declared. That holds because `TypeDescriptionStage` runs after `AttributeProcessingStage` and prepends the type sentence, `AttributeProcessingStage` processes `DataDocsAttribute` instances before Spatie validation rules, and the requirement sentences are appended later by the pipeline. A custom type's sentences, appended earlier by `CustomTypeStage`, come before the `Description` text. On methods, the docblock says the text sets the Scribe endpoint description and may sit next to `ResponseData`. `README.md` states the same order for the type and value sentences; it does not mention a custom type's sentences.
 
 ### Example
 
@@ -116,10 +116,12 @@ Package attributes are read via public properties, not `parameters()`. Registere
 
 ## Safeguards
 
-- Description is the only repeatable attribute in this set.
-- On a Data property, Description text lands after the type sentence and the `#[In]` / `#[NotIn]` value sentences, and before every other validation and requirement sentence, independent of where the attribute is declared. `tests/Integration/Pipeline/DescriptionOrderTest.php` pins one complete description through the default pipeline, with `Description` declared last, one with `In` and `NotIn` declared before and after `Description` (where `NotIn` is folded into the allowed set), and one with only a `NotIn` declared after `Description`, whose own sentence precedes the custom text. The same file runs consumer subclasses of `Example`, `QueryParameter` and `Hidden` through the pipeline and pins that each behaves as its parent.
-- ResponseData does not validate that `dtoClass` exists or is a Laravel Data class; `ParameterGenerator` returns no fields for a class that does not exist (DTO extraction canvas).
+- Description is the only repeatable attribute in this set and the only one that targets both properties and methods.
+- Method-level Description does not require ResponseData on the same method.
+- On a Data property, Description text lands after the type sentence and the `#[In]` / `#[NotIn]` value sentences, and before every other validation and requirement sentence, independent of where the attribute is declared. The README states the same order. `tests/Integration/Pipeline/DescriptionOrderTest.php` pins one complete description through the default pipeline, with `Description` declared last, one with `In` and `NotIn` declared before and after `Description` (where `NotIn` is folded into the allowed set), and one with only a `NotIn` declared after `Description`, whose own sentence precedes the custom text. The same file runs consumer subclasses of `Example`, `QueryParameter` and `Hidden` through the pipeline and pins that each behaves as its parent.
+- ResponseData does not validate that `dtoClass` exists or is a Laravel Data class; `ParameterGenerator` returns no fields for one that is not (DTO extraction canvas).
 - Example allows any PHP value including null; null is indistinguishable later from “no example” at ExampleGenerationStage (`example !== null`).
 - An explicit `#[Example]` is published as given: generation, the pattern filter and the `NotIn` redraw apply only to generated examples (example generation canvas), so an example that breaks the field's own rules is the author's to fix. Such an example also decides nothing about which pattern is published: `publishedPattern` weighs the example only when every rule of the field accepts it: its pattern and format rules, its length and numeric bounds, and its `#[In]` set (parameter metadata canvas; `InTest` "keeps an approximate pattern beside an explicit example Laravel rejects" and "…for a bound or the In set": `#[Example('cafébar'), Lowercase, Max(3)]` and `#[Example('café'), Lowercase, In(['abc', 'xyz'])]` keep `^[a-z]+$`).
 - QueryParameter does not encode HTTP method; GET vs body routing is ParameterFilter’s job.
 - A non-null `#[Example]` value is never overwritten by a validation-attribute processor: `ExampleProcessor` runs first, and any processor that writes `example` does so only when it is null (today the acceptance processors, cross-field and acceptance canvas), so `#[Example(null)]` can be. `UrlProcessor` records a scheme instead of writing the example (identifiers canvas).
+- The `QueryParameter` docblock and the README state the GET rule as `ParameterFilter` applies it (DTO extraction canvas): on a GET with no marked property every property is a query parameter; once one is marked, unmarked properties stay in the body.

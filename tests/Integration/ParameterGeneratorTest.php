@@ -14,6 +14,18 @@ beforeEach(function () {
     $this->generator = new ParameterGenerator($this->pipeline, $this->dataConfig);
 });
 
+it('returns no parameters for a class that is not a Laravel Data class', function (string $class) {
+    expect(($this->generator)($class))->toBe([]);
+})->with([
+    'a plain class'   => [ParameterGeneratorPlainClass::class],
+    'a missing class' => ['App\\Data\\DoesNotExist'],
+]);
+
+class ParameterGeneratorPlainClass
+{
+    public function __construct(public string $name) {}
+}
+
 it('generates parameters for simple data class', function () {
     $parameterObjects = ($this->generator)(SimpleTestData::class);
     $parameters = array_map(fn($param) => $param->toArray(), $parameterObjects);
@@ -24,6 +36,12 @@ it('generates parameters for simple data class', function () {
         ->and($parameters['name']['required'])->toBeTrue()
         ->and($parameters['age']['type'])->toBe('integer')
         ->and($parameters['age']['required'])->toBeTrue();
+});
+
+it('documents a field typed by an enum with no cases instead of failing', function () {
+    $parameters = array_map(fn($param) => $param->toArray(), ($this->generator)(EmptyEnumTestData::class));
+
+    expect($parameters['status']['type'])->toBe('string');
 });
 
 it('handles optional and nullable properties', function () {
@@ -230,4 +248,11 @@ class DescribedFieldsData extends Data
         #[Description('Line B')]
         public string $notes,
     ) {}
+}
+
+enum EmptyEnumTestStatus: string {}
+
+class EmptyEnumTestData extends Data
+{
+    public function __construct(public EmptyEnumTestStatus $status) {}
 }
