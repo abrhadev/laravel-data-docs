@@ -11,7 +11,7 @@ final class RequiredUnlessProcessor extends RequirementConditionProcessor
 
     private const DEGRADED_SENTENCE = 'Required depending on the value of %s.';
 
-    public function process(object $attribute, ParameterContext $context): void
+    protected function describe(object $attribute, ParameterContext $context): void
     {
         $parameters = $this->parametersOf($attribute);
 
@@ -19,15 +19,17 @@ final class RequiredUnlessProcessor extends RequirementConditionProcessor
             return;
         }
 
-        $compared = (array) $parameters[1];
+        [$name, $extra] = $this->conditionParts($parameters[0]);
+        $compared = [...$extra, ...(array) $parameters[1]];
 
         // Laravel rejects a declaration with no compared value at validation
-        // time, so there is no enforced condition to state.
+        // time, so there is no enforced condition to state; a field written
+        // 'a,b' compares a with b.
         if ($compared === []) {
             return;
         }
 
-        $field = $this->fieldName($this->extractFieldName($parameters[0]));
+        $field = $this->fieldName($name);
         $values = $this->renderValues($compared);
 
         $this->appendSentence($attribute, $context, $values === null

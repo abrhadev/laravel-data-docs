@@ -65,7 +65,7 @@ return [
 Optionally, publish the config file:
 
 ```bash
-php artisan vendor:publish --tag="laravel-data-docs-config"
+php artisan vendor:publish --tag="data-docs-config"
 ```
 
 ## Basic Usage
@@ -188,7 +188,7 @@ class ProductData extends Data
 
 ### `#[Description]`
 
-Adds one or more custom description strings to a parameter. These are appended after the generated type sentence and before the validation and requirement sentences, wherever the attribute is declared. The attribute is repeatable and accepts one or more strings.
+Adds one or more custom description strings to a parameter. These are appended after the generated type sentence and any `#[In]` / `#[NotIn]` value sentences, and before the other validation and requirement sentences, wherever the attribute is declared. The attribute is repeatable and accepts one or more strings.
 
 ```php
 use Abrha\LaravelDataDocs\Attributes\Description;
@@ -267,9 +267,10 @@ The package has built-in support for Laravel Data validation attributes. These a
 - `#[Url]`, `#[ActiveUrl]` - Adds format: uri
 - `#[Uuid]` - Adds format: uuid
 - `#[Password]` - Adds format: password
-- `#[IPv4]`, `#[IPv6]`, `#[IP]` - Adds IP format validation
-- `#[Date]` - Adds format: date
-- `#[DateFormat]` - Adds custom date format pattern
+- `#[IPv4]`, `#[IPv6]` - Adds format: ipv4 / ipv6
+- `#[IP]` - States that the value must be an IP address (no format: it accepts either version)
+- `#[Date]` - States that the value must be a valid date (no format: the rule accepts more than a calendar date)
+- `#[DateFormat]` - States the accepted date formats; adds format: date, date-time or time only when every format maps to that one
 - `#[Json]` - Adds format: json
 
 **String Pattern Attributes:**
@@ -419,7 +420,7 @@ return [
 ```
 
 **Available configuration fields:**
-- `type`: OpenAPI type (string, integer, number, boolean, array, object)
+- `type`: OpenAPI type: `string`, `integer`, `number`, `boolean`, `object`, or one of them with `[]` for an array (`string[]`); a bare `array` is not a valid type here
 - `descriptions`: Array of description strings
 - `pattern`: Regex pattern for validation
 - `format`: OpenAPI format (uuid, email, date-time, etc.)
@@ -432,6 +433,8 @@ return [
 - `minItems`: Minimum array items
 - `maxItems`: Maximum array items
 - `multipleOf`: Number must be multiple of this value
+
+`type` and `descriptions` are required. Every bound must be an integer (an integral float such as `5.0` or a numeric string such as `'5'` is accepted); a length or item count must not be negative, and `multipleOf` must be greater than zero. Anything else throws an `InvalidArgumentException` naming the key when the documentation is generated.
 
 **When to use:** Simple type mappings where you just need to specify OpenAPI properties declaratively.
 
@@ -469,6 +472,8 @@ public function register()
     $registry->register(Ulid::class, new UlidProcessor());
 }
 ```
+
+A processor should set `type` to an OpenAPI type (`string`, `integer`, `number`, `boolean`, `object`, or one of them with `[]`); any other value, including the class name, `array` or `file`, is published as a `string` (or `string[]`). The lookup matches the property's type exactly, so an array of `Ulid` (`Ulid[]`) is a separate key: register a processor for `Ulid::class . '[]'` too, and have it set an array type and an array example (it receives the class name, so one processor can branch on `str_ends_with($className, '[]')`). A `pattern` a processor sets is published as written, so write it as an ECMA-262 regex without delimiters; it also decides which `#[In]` values are published as allowed (the pattern is left out when one of those values fails it).
 
 **When to use:** When you need programmatic control over type documentation or need to generate dynamic examples/descriptions based on the class itself.
 
@@ -556,15 +561,14 @@ class CustomValidationStage implements ParameterPipelineStage
     public function process(ParameterContext $context): ParameterContext
     {
         // Full access to context - can modify any aspect
-        $attributes = $context->propertyAttrs;
-        
-        // Complex custom logic here
-        if (isset($attributes[Deprecated::class])) {
-            $deprecated = $attributes[Deprecated::class];
-            $context->descriptions[] = "**DEPRECATED**: {$deprecated->reason}";
+        $deprecated = $context->property->attributes->first(Deprecated::class);
+
+        // An added stage runs last, after the descriptions were joined, so write to description
+        if ($deprecated !== null) {
+            $context->description = trim("{$context->description} **DEPRECATED**: {$deprecated->reason}");
         }
-        
-        // You can even stop processing by setting isHidden
+
+        // You can even leave the property out by setting isHidden
         if ($this->shouldHideProperty($context)) {
             $context->isHidden = true;
         }
@@ -585,11 +589,13 @@ Register your stage in the pipeline:
 ```php
 use Abrha\LaravelDataDocs\Pipeline\PipelineFactory;
 
-// Note: You'll need to customize how you create the pipeline
-// This typically happens in a service provider or strategy
 $pipeline = PipelineFactory::createDefault()
     ->addStage(new CustomValidationStage());
 ```
+
+`addStage` appends, so your stage runs after every built-in stage, including `ExampleGenerationStage`: by then `descriptions` has been joined into `description` and the example is set, so change those fields directly. There is no API to insert a stage at a given position.
+
+The package's Scribe strategies always build the default pipeline, so a custom stage reaches Scribe output only through your own strategy that builds this pipeline and passes it to `ParameterGenerator`.
 
 **When to use:** When you need to:
 - Implement complex cross-cutting concerns

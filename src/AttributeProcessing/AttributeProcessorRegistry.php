@@ -6,6 +6,7 @@ use Abrha\LaravelDataDocs\AttributeProcessing\Processors\AcceptedIfProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\AcceptedProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\BetweenProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\ConfirmedProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DateProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DateFormatProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DeclinedIfProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DeclinedProcessor;
@@ -13,6 +14,7 @@ use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DescriptionProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DifferentProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DigitsBetweenProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DigitsProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\EmailProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\EndsWithProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\ExampleProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\ExcludeIfProcessor;
@@ -28,11 +30,14 @@ use Abrha\LaravelDataDocs\AttributeProcessing\Processors\LessThanProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\MaxProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\MinProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\MultipleOfProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\PasswordProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\ProhibitedIfProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\ProhibitedProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\ProhibitedUnlessProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\ProhibitsProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\QueryParameterProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\InProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\NotInProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\RegexProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\RequiredIfProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\RequiredUnlessProcessor;
@@ -44,6 +49,7 @@ use Abrha\LaravelDataDocs\AttributeProcessing\Processors\SameProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\SizeProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\StartsWithProcessor;
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\StaticAttributeProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\UrlProcessor;
 use Abrha\LaravelDataDocs\Attributes\QueryParameter;
 use Spatie\LaravelData\Attributes\Validation\Accepted;
 use Spatie\LaravelData\Attributes\Validation\AcceptedIf;
@@ -70,6 +76,7 @@ use Spatie\LaravelData\Attributes\Validation\Filled;
 use Spatie\LaravelData\Attributes\Validation\EndsWith;
 use Spatie\LaravelData\Attributes\Validation\GreaterThan;
 use Spatie\LaravelData\Attributes\Validation\GreaterThanOrEqualTo;
+use Spatie\LaravelData\Attributes\Validation\In;
 use Spatie\LaravelData\Attributes\Validation\InArray;
 use Spatie\LaravelData\Attributes\Validation\IP;
 use Spatie\LaravelData\Attributes\Validation\IPv4;
@@ -81,6 +88,7 @@ use Spatie\LaravelData\Attributes\Validation\Lowercase;
 use Spatie\LaravelData\Attributes\Validation\Max;
 use Spatie\LaravelData\Attributes\Validation\Min;
 use Spatie\LaravelData\Attributes\Validation\MultipleOf;
+use Spatie\LaravelData\Attributes\Validation\NotIn;
 use Spatie\LaravelData\Attributes\Validation\Password;
 use Spatie\LaravelData\Attributes\Validation\Prohibited;
 use Spatie\LaravelData\Attributes\Validation\ProhibitedIf;
@@ -135,29 +143,41 @@ final class AttributeProcessorRegistry
         $this->processors[$attributeClass] = $processor;
     }
 
+    /**
+     * A subclass of a registered attribute is processed as its nearest
+     * registered parent, as Laravel Data enforces it through the inherited rule.
+     */
     public function getProcessorFor(string $attributeClass): ?AttributeProcessor
     {
-        return $this->processors[$attributeClass] ?? null;
+        $parents = class_exists($attributeClass) ? array_values(class_parents($attributeClass)) : [];
+
+        foreach ([$attributeClass, ...$parents] as $class) {
+            if (isset($this->processors[$class])) {
+                return $this->processors[$class];
+            }
+        }
+
+        return null;
     }
 
     private function registerDefaults(): void
     {
-        $this->register(Email::class, new StaticAttributeProcessor(format: 'email', description: 'Must be a valid email address.'));
-        $this->register(Url::class, new StaticAttributeProcessor(format: 'uri', description: 'Must be a valid URL.'));
+        $this->register(Email::class, new EmailProcessor());
+        $this->register(Url::class, new UrlProcessor());
         $this->register(ActiveUrl::class, new StaticAttributeProcessor(format: 'uri', description: 'Must be an active URL.'));
-        $this->register(Uuid::class, new StaticAttributeProcessor(format: 'uuid', description: 'Must be a valid UUID.'));
-        $this->register(Password::class, new StaticAttributeProcessor(format: 'password', description: 'Must be a valid password.'));
-        $this->register(IPv4::class, new StaticAttributeProcessor(format: 'ipv4', description: 'Must be a valid IPv4 address.'));
-        $this->register(IPv6::class, new StaticAttributeProcessor(format: 'ipv6', description: 'Must be a valid IPv6 address.'));
-        $this->register(IP::class, new StaticAttributeProcessor(description: 'Must be a valid IP address.'));
-        $this->register(Date::class, new StaticAttributeProcessor(format: 'date', description: 'Must be a valid date.'));
-        $this->register(Json::class, new StaticAttributeProcessor(format: 'json', description: 'Must be a valid JSON string.'));
-        $this->register(Ulid::class, new StaticAttributeProcessor(pattern: '^[0-9A-HJKMNP-TV-Z]{26}$', description: 'Must be a valid ULID.'));
-        $this->register(Alpha::class, new StaticAttributeProcessor(pattern: '^[a-zA-Z]+$', description: 'Must contain only letters.'));
-        $this->register(AlphaDash::class, new StaticAttributeProcessor(pattern: '^[a-zA-Z0-9_-]+$', description: 'Must contain only letters, numbers, dashes, and underscores.'));
-        $this->register(AlphaNumeric::class, new StaticAttributeProcessor(pattern: '^[a-zA-Z0-9]+$', description: 'Must contain only letters and numbers.'));
-        $this->register(Lowercase::class, new StaticAttributeProcessor(pattern: '^[a-z]+$', description: 'Must contain only lowercase letters.'));
-        $this->register(Uppercase::class, new StaticAttributeProcessor(pattern: '^[A-Z]+$', description: 'Must contain only uppercase letters.'));
+        $this->register(Uuid::class, new StaticAttributeProcessor(format: 'uuid', description: 'Must be a valid UUID.', valueRule: 'uuid'));
+        $this->register(Password::class, new PasswordProcessor());
+        $this->register(IPv4::class, new StaticAttributeProcessor(format: 'ipv4', description: 'Must be a valid IPv4 address.', valueRule: 'ipv4'));
+        $this->register(IPv6::class, new StaticAttributeProcessor(format: 'ipv6', description: 'Must be a valid IPv6 address.', valueRule: 'ipv6'));
+        $this->register(IP::class, new StaticAttributeProcessor(description: 'Must be a valid IP address.', exampleFormat: 'ipv4', valueRule: 'ip'));
+        $this->register(Date::class, new DateProcessor());
+        $this->register(Json::class, new StaticAttributeProcessor(format: 'json', description: 'Must be a valid JSON string.', valueRule: 'json'));
+        $this->register(Ulid::class, new StaticAttributeProcessor(pattern: '^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$', description: 'Must be a valid ULID.'));
+        $this->register(Alpha::class, new StaticAttributeProcessor(pattern: '^[a-zA-Z]+$', description: 'Must contain only letters.', valuePattern: '^[\pL\pM]+$'));
+        $this->register(AlphaDash::class, new StaticAttributeProcessor(pattern: '^[a-zA-Z0-9_-]+$', description: 'Must contain only letters, numbers, dashes, and underscores.', valuePattern: '^[\pL\pM\pN_-]+$'));
+        $this->register(AlphaNumeric::class, new StaticAttributeProcessor(pattern: '^[a-zA-Z0-9]+$', description: 'Must contain only letters and numbers.', valuePattern: '^[\pL\pM\pN]+$'));
+        $this->register(Lowercase::class, new StaticAttributeProcessor(pattern: '^[a-z]+$', description: 'Must contain only lowercase letters.', valuePattern: '^[^\p{Lu}\p{Lt}]*$'));
+        $this->register(Uppercase::class, new StaticAttributeProcessor(pattern: '^[A-Z]+$', description: 'Must contain only uppercase letters.', valuePattern: '^[^\p{Ll}\p{Lt}]*$'));
 
         $this->register(DateFormat::class, new DateFormatProcessor());
         $this->register(Digits::class, new DigitsProcessor());
@@ -165,6 +185,8 @@ final class AttributeProcessorRegistry
         $this->register(StartsWith::class, new StartsWithProcessor());
         $this->register(EndsWith::class, new EndsWithProcessor());
         $this->register(Regex::class, new RegexProcessor());
+        $this->register(In::class, new InProcessor());
+        $this->register(NotIn::class, new NotInProcessor());
         $this->register(MultipleOf::class, new MultipleOfProcessor());
 
         $this->register(Min::class, new MinProcessor());

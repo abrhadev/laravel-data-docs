@@ -13,7 +13,7 @@ final class RequiredWithAllProcessor extends RequirementConditionProcessor
 
     private const ALL_SENTENCE = 'Required when all of %s are present.';
 
-    public function process(object $attribute, ParameterContext $context): void
+    protected function describe(object $attribute, ParameterContext $context): void
     {
         $parameters = $this->parametersOf($attribute);
 

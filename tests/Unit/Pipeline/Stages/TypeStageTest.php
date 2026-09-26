@@ -250,6 +250,21 @@ it('does not mark context as nested or array for regular types', function () {
         ->and($result->hasArrayParameters)->toBeFalse();
 });
 
+it('types an enum with no cases by its backing type and allows no value', function (string $class, string $type) {
+    $property = $this->dataConfig->getDataClass($class)->properties->first();
+
+    $result = $this->stage->process(new ParameterContext($property->name, $property));
+
+    expect($result->type)->toBe($type)
+        ->and($result->enumInfo)->toBeNull()
+        ->and($result->allowedValues)->toBe([]);
+})->with([
+    'int backed'    => [TypeTestEmptyIntBackedEnumData::class, 'integer'],
+    'string backed' => [TypeTestEmptyStringBackedEnumData::class, 'string'],
+    'pure'          => [TypeTestEmptyUnitEnumData::class, 'string'],
+    'array'         => [TypeTestEmptyIntBackedEnumArrayData::class, 'integer[]'],
+]);
+
 enum TypeTestIntBackedEnum: int
 {
     case ONE = 1;
@@ -390,4 +405,33 @@ class TypeTestNestedObjectData extends Data
         /** @var array<TypeTestUserData> */
         public array $users,
     ) {}
+}
+
+enum TypeTestEmptyIntBackedEnum: int {}
+
+enum TypeTestEmptyStringBackedEnum: string {}
+
+enum TypeTestEmptyUnitEnum {}
+
+class TypeTestEmptyIntBackedEnumData extends Data
+{
+    public function __construct(public TypeTestEmptyIntBackedEnum $status) {}
+}
+
+class TypeTestEmptyStringBackedEnumData extends Data
+{
+    public function __construct(public TypeTestEmptyStringBackedEnum $status) {}
+}
+
+class TypeTestEmptyUnitEnumData extends Data
+{
+    public function __construct(public TypeTestEmptyUnitEnum $color) {}
+}
+
+class TypeTestEmptyIntBackedEnumArrayData extends Data
+{
+    /**
+     * @param TypeTestEmptyIntBackedEnum[] $statuses
+     */
+    public function __construct(public array $statuses) {}
 }

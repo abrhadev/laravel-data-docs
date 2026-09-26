@@ -12,8 +12,17 @@ final class SizeProcessor extends SizeBasedProcessor
         $parameters = $attribute->parameters();
         $value = $parameters[0] ?? null;
 
-        if ($value !== null) {
+        if ($this->isLiteral($value)) {
             $unit = $this->getUnit($context, $value);
+
+            if ($this->rangeIsEmpty($context, $value, $value)) {
+                $context->descriptions[] = $unit
+                    ? "Note: must have exactly <code>{$value}</code> {$unit}, which no {$this->impossibleSubject($context)} can have, {$this->impossibleOutcome($context, $value, $value)}."
+                    : "Note: must be exactly <code>{$value}</code>, which no {$this->impossibleSubject($context)} can be, {$this->impossibleOutcome($context, $value, $value)}.";
+
+                return;
+            }
+
             $this->applyConstraint($context, 'min', $value);
             $this->applyConstraint($context, 'max', $value);
 

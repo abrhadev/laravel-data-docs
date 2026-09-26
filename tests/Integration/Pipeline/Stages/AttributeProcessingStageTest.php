@@ -49,12 +49,32 @@ it('processes validation attributes end-to-end', function ($propertyName, $expec
     ['email', 'Must be a string. Must be a valid email address.', 'email'],
     ['website', 'Must be a string. Must be a valid URL.', 'uri'],
     ['uuid', 'Must be a string. Must be a valid UUID.', 'uuid'],
-    ['password', 'Must be a string. Must be a valid password.', 'password'],
+    ['password', 'Must be a string. Must be a password of at least <code>12</code> characters.', 'password'],
     ['ipv4', 'Must be a string. Must be a valid IPv4 address.', 'ipv4'],
     ['jsonData', 'Must be a string. Must be a valid JSON string.', 'json'],
-    ['dateValue', 'Must be a string. Must be a valid date.', 'date'],
+    ['dateValue', 'Must be a string. Must be a valid date.', null],
     ['ulid', 'Must be a string. Must be a valid ULID.', null],
 ]);
+
+it('keeps a format when a pattern-only static row follows, and a pattern when a format-only row follows', function () {
+    $testData = new class ('a', 'b') extends Spatie\LaravelData\Data {
+        public function __construct(
+            #[Spatie\LaravelData\Attributes\Validation\Uuid, Spatie\LaravelData\Attributes\Validation\Lowercase]
+            public string $formatThenPattern,
+            #[Spatie\LaravelData\Attributes\Validation\Alpha, Spatie\LaravelData\Attributes\Validation\IPv4]
+            public string $patternThenFormat,
+        ) {}
+    };
+    $dataClass = app(DataConfig::class)->getDataClass($testData::class);
+
+    $first = new ParameterContext('formatThenPattern', $dataClass->properties->first(fn($p) => $p->name === 'formatThenPattern'));
+    $first->type = 'string';
+    $second = new ParameterContext('patternThenFormat', $dataClass->properties->first(fn($p) => $p->name === 'patternThenFormat'));
+    $second->type = 'string';
+
+    expect($this->stage->process($first))->format->toBe('uuid')->pattern->toBe('^[a-z]+$')
+        ->and($this->stage->process($second))->format->toBe('ipv4')->pattern->toBe('^[a-zA-Z]+$');
+});
 
 it('sets OpenAPI fields correctly', function ($propertyName, $expectedFields) {
     $dataClass = app(DataConfig::class)->getDataClass(TestData::class);

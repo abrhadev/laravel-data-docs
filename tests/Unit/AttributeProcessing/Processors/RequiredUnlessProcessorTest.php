@@ -40,7 +40,7 @@ it('renders a null comparison value', function () {
 
     $this->processor->process(new RequiredUnless('status', null), $context);
 
-    expect($context->descriptions)->toBe(['Required unless <b><i>status</i></b> is <code>null</code>.']);
+    expect($context->descriptions)->toBe(['Required unless <b><i>status</i></b> is <code>""</code>.']);
 });
 
 it('degrades to a value-free sentence for an external reference', function () {

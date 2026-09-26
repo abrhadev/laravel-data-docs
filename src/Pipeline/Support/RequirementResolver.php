@@ -2,6 +2,10 @@
 
 namespace Abrha\LaravelDataDocs\Pipeline\Support;
 
+use Abrha\LaravelDataDocs\AttributeProcessing\ReplacedRules;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Validator;
+use ReflectionMethod;
 use Spatie\LaravelData\Attributes\Validation\Accepted;
 use Spatie\LaravelData\Attributes\Validation\Declined;
 use Spatie\LaravelData\Attributes\Validation\Exclude;
@@ -67,10 +71,12 @@ use Throwable;
  * Present they demand the key without being requiring rules. Filled does not:
  * it passes when the key is absent.
  *
- * An unrecognised requiring rule counts as unconditional. That preserves the
- * answer given before this distinction existed; guessing optional would risk
- * publishing a mandatory field as optional, the failure this class was written
- * to eliminate.
+ * A subclass of a conditional rule is conditional too while it emits a
+ * conditional keyword (see requiringDemands). An unrecognised requiring rule
+ * (one implementing RequiringRule directly) counts as unconditional. That
+ * preserves the answer given before this distinction existed; guessing
+ * optional would risk publishing a mandatory field as optional, the failure
+ * this class was written to eliminate.
  *
  * Prohibition never changes requirement status: Prohibited is not a requiring
  * rule, so a non-nullable property without a default still infers Required and
@@ -79,11 +85,13 @@ use Throwable;
  * which is what neverSatisfiable states. It reads rejectsEmpty rather than
  * required alone because #[Present, Prohibited] is satisfied by an empty value.
  * Bare means no wrapped rule object, whose condition may make the field
- * satisfiable; it is tested by loose equality against a fresh instance, because
- * stringifying the attribute would evaluate the wrapped rule's condition. An
+ * satisfiable; ReplacedRules::isBare reads the wrapped rule without evaluating
+ * its condition, so a consumer subclass of Prohibited counts too, unless it
+ * declares its own getRule(). An
  * exclusion rule earlier in the list also withholds it: Laravel runs rules in
  * this order and stops validating a field once it is excluded, so
- * #[Exclude, Prohibited] passes a request that sends a value.
+ * #[Exclude, Prohibited] passes a request that sends a value. A bare 'exclude'
+ * rule string stays a plain Rule in Spatie's list but excludes all the same.
  */
 final class RequirementResolver
 {
@@ -94,6 +102,40 @@ final class RequirementResolver
         RequiredWithAll::class,
         RequiredWithout::class,
         RequiredWithoutAll::class,
+    ];
+
+    /**
+     * Laravel's implicit rules by keyword, with what each enforces in every
+     * request: [the key must be sent, an empty value is rejected]. The
+     * conditional ones enforce neither, present only the first, filled and
+     * missing (which rejects any sent value) only the second.
+     * RequirementResolverTest holds this list to Laravel's own.
+     */
+    private const IMPLICIT_KEYWORDS = [
+        'accepted'             => [true, true],
+        'accepted_if'          => [false, false],
+        'declined'             => [true, true],
+        'declined_if'          => [false, false],
+        'filled'               => [false, true],
+        'missing'              => [false, true],
+        'missing_if'           => [false, false],
+        'missing_unless'       => [false, false],
+        'missing_with'         => [false, false],
+        'missing_with_all'     => [false, false],
+        'present'              => [true, false],
+        'present_if'           => [false, false],
+        'present_unless'       => [false, false],
+        'present_with'         => [false, false],
+        'present_with_all'     => [false, false],
+        'required'             => [true, true],
+        'required_if'          => [false, false],
+        'required_if_accepted' => [false, false],
+        'required_if_declined' => [false, false],
+        'required_unless'      => [false, false],
+        'required_with'        => [false, false],
+        'required_with_all'    => [false, false],
+        'required_without'     => [false, false],
+        'required_without_all' => [false, false],
     ];
 
     private const KEY_DEMANDING_RULES = [
@@ -149,11 +191,11 @@ final class RequirementResolver
 
         $onlyValidatedWhenPresent = $rules->hasType(Sometimes::class);
 
-        $unconditionallyRequired = $this->hasUnconditionalRequirement($rules);
+        [$requiringDemandsKey, $requiringRejectsEmpty] = $this->requiringDemands($rules);
 
-        $rejectsEmpty = $unconditionallyRequired || $this->rejectsNull($rules);
+        $rejectsEmpty = $requiringRejectsEmpty || $this->rejectsNull($rules);
 
-        $mustBePresent = $unconditionallyRequired
+        $mustBePresent = $requiringDemandsKey
             || $this->hasAnyType($rules, self::KEY_DEMANDING_RULES);
 
         $nullable = $rules->hasType(Nullable::class)
@@ -181,13 +223,17 @@ final class RequirementResolver
     private function hasUnexcludedBareProhibition(PropertyRules $rules): bool
     {
         foreach ($rules->all() as $rule) {
+            if (ReplacedRules::isBareExclude($rule)) {
+                return false;
+            }
+
             foreach (self::EXCLUDING_RULES as $excluding) {
                 if ($rule instanceof $excluding) {
                     return false;
                 }
             }
 
-            if ($rule instanceof Prohibited && $rule == new Prohibited()) {
+            if ($rule instanceof Prohibited && ReplacedRules::isBare($rule)) {
                 return true;
             }
         }
@@ -220,21 +266,66 @@ final class RequirementResolver
         return false;
     }
 
-    private function hasUnconditionalRequirement(PropertyRules $rules): bool
+    /**
+     * What the requiring rules enforce in every request: [the key must be
+     * sent, an empty value is rejected].
+     *
+     * @return array{0: bool, 1: bool}
+     */
+    private function requiringDemands(PropertyRules $rules): array
     {
+        $demandsKey = false;
+        $rejectsEmpty = false;
+
         foreach ($rules->all() as $rule) {
             if (!$rule instanceof RequiringRule) {
                 continue;
             }
 
-            if (in_array($rule::class, self::CONDITIONAL_REQUIRING_RULES, true)) {
+            [$key, $empty] = $this->demandsOf($rule);
+            $demandsKey = $demandsKey || $key;
+            $rejectsEmpty = $rejectsEmpty || $empty;
+        }
+
+        return [$demandsKey, $rejectsEmpty];
+    }
+
+    /**
+     * Upstream builds the rule string from keyword(), so the keyword decides
+     * what a conditional subclass demands: one that keeps a conditional keyword
+     * (it overrides only parameters(), or restates the keyword) or switches to
+     * another conditional one, present_if and required_if_accepted included,
+     * stays conditional, and one that emits plain required is not. An
+     * inherited keyword() is read by reflection without a call. Any other
+     * built-in rule is not implicit, so Laravel skips it for an absent key and,
+     * beside nullable, for null. A keyword() that throws, or a keyword Laravel
+     * does not ship (a custom rule may be implicit), counts as unconditional,
+     * as an unrecognised requiring rule does.
+     *
+     * @return array{0: bool, 1: bool}
+     */
+    private function demandsOf(RequiringRule $rule): array
+    {
+        foreach (self::CONDITIONAL_REQUIRING_RULES as $conditional) {
+            if (!$rule instanceof $conditional) {
                 continue;
             }
 
-            return true;
+            if ((new ReflectionMethod($rule, 'keyword'))->getDeclaringClass()->getName() === $conditional) {
+                return self::IMPLICIT_KEYWORDS[$conditional::keyword()];
+            }
+
+            try {
+                $keyword = $rule::keyword();
+            } catch (Throwable) {
+                return [true, true];
+            }
+
+            return self::IMPLICIT_KEYWORDS[$keyword]
+                ?? (method_exists(Validator::class, 'validate' . Str::studly($keyword)) ? [false, false] : [true, true]);
         }
 
-        return false;
+        return [true, true];
     }
 
     private function inferRules(DataProperty $property): PropertyRules

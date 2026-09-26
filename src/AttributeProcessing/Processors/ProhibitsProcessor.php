@@ -2,10 +2,10 @@
 
 namespace Abrha\LaravelDataDocs\AttributeProcessing\Processors;
 
-use Abrha\LaravelDataDocs\AttributeProcessing\Processors\Base\ConditionProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\Base\ProhibitionExclusionProcessor;
 use Abrha\LaravelDataDocs\Pipeline\Context\ParameterContext;
 
-final class ProhibitsProcessor extends ConditionProcessor
+final class ProhibitsProcessor extends ProhibitionExclusionProcessor
 {
     private const SINGLE_SENTENCE = 'Sending this field forbids sending %s; the request is rejected if both are sent.';
 
@@ -27,9 +27,9 @@ final class ProhibitsProcessor extends ConditionProcessor
 
         $fields = array_map(fn($name) => $this->fieldName($name), $names);
 
-        $context->descriptions[] = count($fields) === 1
+        $this->appendEnforced($attribute, $context, count($fields) === 1
             ? sprintf(self::SINGLE_SENTENCE, $fields[0])
-            : sprintf(self::MULTI_SENTENCE, $this->joinFields($fields));
+            : sprintf(self::MULTI_SENTENCE, $this->joinFields($fields)));
     }
 
     /**

@@ -19,7 +19,8 @@ final class InArrayProcessor extends ConditionProcessor
             return;
         }
 
-        $name = $this->extractFieldName($parameters[0]);
+        // Laravel reads the first field of a reference written 'a,b'.
+        $name = $this->fieldNames([$parameters[0]])[0];
 
         if ($name === '') {
             return;

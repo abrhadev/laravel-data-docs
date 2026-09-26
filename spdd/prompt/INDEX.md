@@ -6,7 +6,7 @@ Every source file, and every row of the attribute processor registry's default t
 
 Canvases come in two kinds:
 
-- **Core canvases** own a layer and specify its contracts: types, call shapes, ordering, invariants and extension points. A core canvas never specifies a processor or a registry row. It names validation attributes only where its own code does: `RequirementResolver`'s rule sets and `RequirementDescriptionStage`'s sentences decide requirement status for whole groups of attributes, and belong to the requirement resolution canvas. It changes only when a contract changes.
+- **Core canvases** own a layer and specify its contracts: types, call shapes, ordering, invariants and extension points. A core canvas never specifies a processor or a registry row. It names validation attributes only where its own code does: `RequirementResolver`'s rule sets and `RequirementDescriptionStage`'s sentences decide requirement status for whole groups of attributes, `TypeDescriptionStage` writes the `In` / `NotIn` value sentences once both have run, and `ExampleGenerationStage` generates examples for the formats and fields the families write (`uri`, `password`, `dateFormat`, `uriScheme`, `exampleFormat`); all of these belong to the three pipeline canvases (parameter metadata, requirement resolution, example generation). It changes only when a contract changes.
 - **Family canvases** own one family of validation attributes: its processors, its family-private base class, and its registry rows. A family canvas is the lasting owner of its user story. It is never folded away or deleted.
 
 ## Core canvases
@@ -18,7 +18,7 @@ Canvases come in two kinds:
 | Example generation | `LDD-202609260836-[Canvas]-pipeline-example-generation.md` | `Pipeline/Stages/ExampleGenerationStage.php` |
 | Documentation records | `LDD-202608281600-[Canvas]-vo-documentation-records.md` | `src/ValueObjects/**` |
 | Public attributes | `LDD-202608281600-[Canvas]-api-public-attributes.md` | `src/Attributes/**`; `DescriptionProcessor`, `ExampleProcessor`, `QueryParameterProcessor`; registry rows `Description`, `Example`, `QueryParameter` |
-| Attribute processing framework | `LDD-202609251859-[Canvas]-service-attribute-processing-framework.md` | `AttributeProcessor`, `AttributeProcessorRegistry` (lookup, override, and the order of registration, not the rows), `StaticAttributeProcessor` (the mechanism, not its rows), `Processors/Base/FieldReferenceProcessor`, `Processors/Base/ConditionProcessor`, and the shared sentence rules (field name vs value, the condition wording) |
+| Attribute processing framework | `LDD-202609251859-[Canvas]-service-attribute-processing-framework.md` | `AttributeProcessor`, `AttributeProcessorRegistry` (lookup, override, and the order of registration, not the rows), `StaticAttributeProcessor` (the mechanism, not its rows), `Processors/Base/FieldReferenceProcessor`, `Processors/Base/ConditionProcessor`, `ReplacedRules`, and the shared sentence rules (field name vs value, the condition wording) |
 | Custom type extension point | `LDD-202608281600-[Canvas]-service-custom-type-extension.md` | `src/CustomTypeProcessing/**` |
 | DTO parameter extraction | `LDD-202608281600-[Canvas]-service-dto-parameter-extraction.md` | `src/Services/**` |
 | Scribe strategies | `LDD-202608281600-[Canvas]-api-scribe-strategies.md` | `src/Strategies/**` |
@@ -33,13 +33,13 @@ Every existing processor and row belongs to its final family from the start. A f
 | Family | Story | File | Processors and base class | Rows | Added by its story |
 | --- | --- | --- | --- | --- | --- |
 | Conditional requirement | STORY-001-001 (+ `Filled` from STORY-001-000) | `STORY-001-001-202609251859-[Canvas]-family-conditional-requirement.md` | `RequiredIf`, `RequiredUnless`, `RequiredWith`, `RequiredWithAll`, `RequiredWithout`, `RequiredWithoutAll`; `Base/RequirementConditionProcessor` | those six, plus `Filled` (static) | shipped |
-| Prohibition and exclusion | STORY-001-002 | `STORY-001-002-202609251859-[Canvas]-family-prohibition-exclusion.md` | `Prohibited`, `ProhibitedIf`, `ProhibitedUnless`, `Prohibits`, `Exclude`, `ExcludeIf`, `ExcludeUnless`, `ExcludeWith`, `ExcludeWithout` | those nine | shipped |
+| Prohibition and exclusion | STORY-001-002 | `STORY-001-002-202609251859-[Canvas]-family-prohibition-exclusion.md` | `Prohibited`, `ProhibitedIf`, `ProhibitedUnless`, `Prohibits`, `Exclude`, `ExcludeIf`, `ExcludeUnless`, `ExcludeWith`, `ExcludeWithout`; `Base/ProhibitionExclusionProcessor` | those nine | shipped |
 | Cross-field comparison and acceptance | STORY-001-003 | `STORY-001-003-202609251859-[Canvas]-family-cross-field-acceptance.md` | `Same`, `Different`, `InArray`, `Confirmed`, `Accepted`, `AcceptedIf`, `Declined`, `DeclinedIf`; `Base/AcceptanceProcessor` | those eight | shipped |
-| Size and bounds | pre-SPDD (extended by STORY-001-005/006/007) | `LDD-202609251859-[Canvas]-family-size-bounds.md` | `Min`, `Max`, `Between`, `Size`, `MultipleOf`, `GreaterThan`, `GreaterThanOrEqualTo`, `LessThan`, `LessThanOrEqualTo`; `Base/SizeBasedProcessor`, `Base/ComparisonProcessor` | those nine | type branches (see below) |
-| Enumerated values and text patterns | STORY-001-004 | `STORY-001-004-202609251859-[Canvas]-family-enumerated-text-patterns.md` | `Regex`, `StartsWith`, `EndsWith` | those three, plus the static rows `Alpha`, `AlphaDash`, `AlphaNumeric`, `Lowercase`, `Uppercase` | `In`, `NotIn`, `Enum`, `NotRegex`, `DoesntStartWith`, `DoesntEndWith` |
-| Dates and times | STORY-001-005 | `STORY-001-005-202609251859-[Canvas]-family-dates-times.md` | `DateFormat` | `DateFormat`, plus the static row `Date` | `After`, `AfterOrEqual`, `Before`, `BeforeOrEqual`, `DateEquals`, `TimeZone` |
-| Arrays and type assertions | STORY-001-007 | `STORY-001-007-202609251859-[Canvas]-family-arrays-type-assertions.md` | `Digits`, `DigitsBetween` | those two | `ArrayType`, `ListType`, `StringType`, `IntegerType`, `BooleanType`, `Numeric`, `Distinct`, `RequiredArrayKeys`, `MinDigits`, `MaxDigits` |
-| Identifiers and database-backed | STORY-001-008 | `STORY-001-008-202609251859-[Canvas]-family-identifiers-database.md` | none of its own (static rows only) | the static rows `Email`, `Url`, `ActiveUrl`, `Uuid`, `Ulid`, `Password`, `IP`, `IPv4`, `IPv6`, `Json` | `Exists`, `Unique`, `CurrentPassword`, `MacAddress` |
+| Size and bounds | pre-SPDD (extended by STORY-001-005/006/007) | `LDD-202609251859-[Canvas]-family-size-bounds.md` | `Min`, `Max`, `Between`, `Size`, `MultipleOf`, `GreaterThan`, `GreaterThanOrEqualTo`, `LessThan`, `LessThanOrEqualTo`; `Base/SizeBasedProcessor`, `Base/ComparisonProcessor`, `Base/WritesBounds` (trait) | those nine | type branches (see below) |
+| Enumerated values and text patterns | STORY-001-004 | `STORY-001-004-202609251859-[Canvas]-family-enumerated-text-patterns.md` | `Regex`, `StartsWith`, `EndsWith`, `In`, `NotIn`; `Base/ValueListProcessor` | those five, plus the static rows `Alpha`, `AlphaDash`, `AlphaNumeric`, `Lowercase`, `Uppercase` | `Enum`, `NotRegex`, `DoesntStartWith`, `DoesntEndWith` |
+| Dates and times | STORY-001-005 | `STORY-001-005-202609251859-[Canvas]-family-dates-times.md` | `DateFormat`, `Date` | `DateFormat`, `Date` | `After`, `AfterOrEqual`, `Before`, `BeforeOrEqual`, `DateEquals`, `TimeZone` |
+| Arrays and type assertions | STORY-001-007 | `STORY-001-007-202609251859-[Canvas]-family-arrays-type-assertions.md` | `Digits`, `DigitsBetween`; `Base/DigitCountProcessor` | those two | `ArrayType`, `ListType`, `StringType`, `IntegerType`, `BooleanType`, `Numeric`, `Distinct`, `RequiredArrayKeys`, `MinDigits`, `MaxDigits` |
+| Identifiers and database-backed | STORY-001-008 | `STORY-001-008-202609251859-[Canvas]-family-identifiers-database.md` | `Email`, `Url`, `Password` | those three, plus the static rows `ActiveUrl`, `Uuid`, `Ulid`, `IP`, `IPv4`, `IPv6`, `Json` | `Exists`, `Unique`, `CurrentPassword`, `MacAddress` |
 | Files and uploads | STORY-001-006 | `STORY-001-006-{ts}-[Canvas]-family-files-uploads.md`, created by that story; no existing class belongs to it | — | — | `File`, `Image`, `Mimes`, `MimeTypes`, `Dimensions` |
 
 ### Known cross-family dependency
@@ -50,7 +50,7 @@ Every existing processor and row belongs to its final family from the start. A f
 
 **Ownership**
 
-- Ownership is fixed from the start; no class or row changes canvas later. Shared base classes (`FieldReferenceProcessor`, `ConditionProcessor`) are in the framework canvas. A family's own base class (`RequirementConditionProcessor`, `AcceptanceProcessor`, `SizeBasedProcessor`, `ComparisonProcessor`) is extended only inside that family. A new family that needs similar behaviour builds on the framework bases. For example, STORY-001-005's field-or-literal date bounds build on `FieldReferenceProcessor`, not on `ComparisonProcessor`.
+- Ownership is fixed from the start; no class or row changes canvas later. Shared base classes (`FieldReferenceProcessor`, `ConditionProcessor`) are in the framework canvas. A family's own base class or trait (`RequirementConditionProcessor`, `ProhibitionExclusionProcessor`, `AcceptanceProcessor`, `SizeBasedProcessor`, `ComparisonProcessor`, `WritesBounds`, `DigitCountProcessor`, `ValueListProcessor`) is extended only inside that family. A new family that needs similar behaviour builds on the framework bases. For example, STORY-001-005's field-or-literal date bounds build on `FieldReferenceProcessor`, not on `ComparisonProcessor`.
 - A family canvas specifies its own registry rows. The framework canvas specifies how registration works and in what order the families register.
 - Adding a field to `ParameterContext`, a value object, or a `ParameterGenerator` step is a core contract change. Update that core canvas in the same plan commit as the family canvas that needs it (as `ConfirmationCompanion` did in STORY-001-003).
 - Not in any canvas: tests, `jig`, CI, Pint, PHPStan, Composer lockfiles, changelog. A family canvas may name its integration test (`tests/Integration/Pipeline/<Family>Test.php`) as its acceptance check.
@@ -92,3 +92,21 @@ A change that alters contracts in two or more core canvases and belongs to no fa
 
 `spdd/review/` is gitignored (`.gitignore`), so review reports are local working files and git keeps none of them. Keep only the latest review per canvas there. A finding that matters beyond the review is recorded in the canvas it concerns, as a known divergence or a safeguard; a canvas never cites a review file by path, because a reader of the repository cannot open it.
 
+## Migration
+
+Done on 2026-09-25: the former `GGQPA-XXX-202608281600-[Codify]-service-attribute-processors.md` was carved into the framework canvas and the eight family canvases above, the `Description` / `Example` / `QueryParameter` processors moved into the public attributes canvas, and the seven other core canvases were renamed from `GGQPA-XXX-202608281600-[Codify]-…` to `LDD-202608281600-[Canvas]-…`. The pipeline, documentation records and DTO extraction canvases kept their content: what looked attribute-specific there specifies code they own (`RequirementResolver`, `RequirementDescriptionStage`, `ConfirmationCompanion`, companion emission), so only their cross-references changed.
+
+`/spdd-code-review` then ran on the nine new canvases and the public attributes canvas. All ten came back "Needs Attention" with no critical finding and no code drift: every sentence template, guard and registry row matched the code. The findings were statements the old canvas already had wrong or left out, and were fixed in the canvases. They also recorded six real publishing defects, each since fixed in code through its family canvas:
+
+- comparison bounds were truncated (`GreaterThan(0.5)` published `exclusiveMinimum: 0`), and declaration order decided a shared `minimum` / `maximum` (size and bounds): fixed by `db4af14` (exact, strictest bounds);
+- a later same-class `#[Rule]` replaced a prohibition or exclusion attribute upstream while its sentence was still published (prohibition and exclusion): fixed by `e688ba7`, then for every family by `ad268d2`;
+- `Regex` published the PHP delimiters as the OpenAPI pattern (enumerated values and text patterns): fixed by `c0d9025` (ECMA-262 patterns);
+- `DateFormat` documented only the first declared format, with OpenAPI formats its values violate (dates and times): fixed by `47c875f`;
+- `Url` / `ActiveUrl` published format `uri`, which example generation did not map, and `Url`, `Email` and `Password` were documented without their arguments (identifiers and database-backed): fixed by `44e59f0`;
+- digit ranges were published on string schemas and overflowed from 19 digits (arrays and type assertions): fixed by `0c69e67`.
+
+A second review round on 2026-09-26 covered all sixteen canvases; its critical and important findings were fixed in code and canvases the same day. The pipeline canvas, then 528 lines, was split the same day along the axis its changes follow: requirement resolution and example generation became canvases of their own, and the parameter metadata pipeline canvas kept the rest.
+
+Remaining, optional:
+
+1. Split `registerDefaults()` into one private method per family, so that a family's registry rows sit in one contiguous block.

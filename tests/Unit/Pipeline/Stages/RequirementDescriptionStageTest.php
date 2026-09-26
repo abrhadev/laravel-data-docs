@@ -41,15 +41,6 @@ it('leaves the description untouched when the flag is false', function () {
     expect($result->description)->toBe('Must be a string.');
 });
 
-it('appends the sentence at most once', function () {
-    $context = new ParameterContext('couponCode', $this->property);
-    $context->onlyValidatedWhenPresent = true;
-
-    $result = $this->stage->process($this->stage->process($context));
-
-    expect(substr_count($result->description, 'Only validated'))->toBe(2);
-})->skip('stage is idempotent per pipeline run; repeated runs are not a supported scenario');
-
 it('appends the nullable sentence when the property accepts null', function () {
     $context = new ParameterContext('couponCode', $this->property);
     $context->description = 'Must be a string.';

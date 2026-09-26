@@ -12,7 +12,7 @@ final class MaxProcessor extends SizeBasedProcessor
         $parameters = $attribute->parameters();
         $value = $parameters[0] ?? null;
 
-        if ($value !== null) {
+        if ($this->isLiteral($value)) {
             $unit = $this->getUnit($context, $value);
             $this->applyConstraint($context, 'max', $value);
 

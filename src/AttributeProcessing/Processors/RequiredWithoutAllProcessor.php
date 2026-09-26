@@ -13,7 +13,7 @@ final class RequiredWithoutAllProcessor extends RequirementConditionProcessor
 
     private const NONE_SENTENCE = 'Required when none of %s are present.';
 
-    public function process(object $attribute, ParameterContext $context): void
+    protected function describe(object $attribute, ParameterContext $context): void
     {
         $parameters = $this->parametersOf($attribute);
 

@@ -19,8 +19,9 @@ final class DeclinedIfProcessor extends AcceptanceProcessor
             return;
         }
 
-        $field = $this->fieldName($this->extractFieldName($parameters[0]));
-        $value = $this->renderValues([$parameters[1]]);
+        [$name, $extra] = $this->conditionParts($parameters[0]);
+        $field = $this->fieldName($name);
+        $value = $this->renderValues([...$extra, $parameters[1]]);
         $list = $this->valueList(self::DECLINED_VALUES);
 
         $context->descriptions[] = $value === null

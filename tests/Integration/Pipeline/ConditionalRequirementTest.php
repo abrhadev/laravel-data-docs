@@ -194,6 +194,29 @@ it('says Present may be empty only where an empty value survives end to end', fu
         ->and(str_contains($context->description, 'but may be empty'))->toBe($survives($empty) && $survives(null));
 })->with(fn() => array_keys(presentEmptinessPayload()));
 
+it('states Present may be empty beside a conditional requirement, which holds while the condition does not', function () {
+    // A conditional rule does not subtract; its own sentence names when the value becomes mandatory.
+    $context = conditionalThroughPipeline('presentIf', PresentBesideConditionTestData::class);
+    $rules = PresentBesideConditionTestData::getValidationRules([])['presentIf'];
+
+    expect($context->description)->toContain('Required when <b><i>mode</i></b> is <code>x</code>.')
+        ->toContain('Must be included in the request, but may be empty.')
+        ->toContain('A null value is accepted.')
+        ->and(validator(['mode' => 'y', 'presentIf' => null], ['presentIf' => $rules])->passes())->toBeTrue()
+        ->and(validator(['mode' => 'y', 'presentIf' => ''], ['presentIf' => $rules])->passes())->toBeTrue()
+        ->and(validator(['mode' => 'x', 'presentIf' => null], ['presentIf' => $rules])->passes())->toBeFalse();
+});
+
+it('states Present may be empty beside a conditional acceptance rule, which holds while the condition does not', function () {
+    $context = conditionalThroughPipeline('presentAccepted', PresentBesideConditionTestData::class);
+    $rules = PresentBesideConditionTestData::getValidationRules([])['presentAccepted'];
+
+    expect($context->description)->toContain('Must be accepted when <b><i>mode</i></b> is <code>x</code>')
+        ->toContain('Must be included in the request, but may be empty.')
+        ->and(validator(['mode' => 'y', 'presentAccepted' => null], ['presentAccepted' => $rules])->passes())->toBeTrue()
+        ->and(validator(['mode' => 'x', 'presentAccepted' => null], ['presentAccepted' => $rules])->passes())->toBeFalse();
+});
+
 function presentEmptinessPayload(): array
 {
     return [
@@ -211,6 +234,17 @@ function presentEmptinessPayload(): array
         'withAccepted'        => true,
         'nested'              => ['street' => 'Main'],
     ];
+}
+
+class PresentBesideConditionTestData extends Data
+{
+    public function __construct(
+        public ?string $mode,
+        #[Present, RequiredIf('mode', 'x')]
+        public ?string $presentIf,
+        #[Present, Spatie\LaravelData\Attributes\Validation\AcceptedIf('mode', 'x')]
+        public ?string $presentAccepted,
+    ) {}
 }
 
 class PresentEmptinessNestedData extends Data
@@ -289,6 +323,11 @@ it('treats a requiring rule declared through #[Rule] like the attribute', functi
     'earlier Rule required'    => ['ruleRequiredFirst', true],
 ]);
 
+it('documents the requiring rule a later #[Rule] string enforces instead', function () {
+    expect(conditionalThroughPipeline('thenRuleRequiredWith', RuleStringTestData::class)->description)
+        ->toContain('Required when <b><i>card_number</i></b> is present.');
+});
+
 class RuleStringTestData extends Data
 {
     public function __construct(
@@ -362,5 +401,45 @@ class DanglingReferenceTestData extends Data
         #[RequiredIf('does_not_exist', 'whatever')]
         public ?string $dangling,
         public string $sibling,
+    ) {}
+}
+
+it('documents a consumer subclass of RequiredIf as RequiredIf, as the validator enforces it', function () {
+    $context = conditionalThroughPipeline('vatNumber', ConditionalSubclassTestData::class);
+    $rules = fn(array $payload) => ConditionalSubclassTestData::getValidationRules($payload);
+
+    expect($context->required)->toBeFalse()
+        ->and($context->description)->toContain('Required when <b><i>country</i></b> is <code>DE</code>.')
+        ->and(validator(['country' => 'DE'], $rules(['country' => 'DE']))->passes())->toBeFalse()
+        ->and(validator(['country' => 'FR'], $rules(['country' => 'FR']))->passes())->toBeTrue();
+});
+
+it('withholds the condition of a RequiredIf subclass declared before #[Present], which strips it', function () {
+    $context = conditionalThroughPipeline('subclassThenPresent', ConditionalSubclassThenPresentTestData::class);
+    $rules = ConditionalSubclassThenPresentTestData::getValidationRules(['country' => 'DE']);
+
+    expect($rules['subclassThenPresent'])->not->toContain('required_if:country,DE')
+        ->and(validator(['country' => 'DE', 'subclassThenPresent' => null], $rules)->passes())->toBeTrue()
+        ->and($context->description)->not->toContain('Required when');
+});
+
+#[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
+class ConditionalRequiredIfSubclass extends RequiredIf {}
+
+class ConditionalSubclassTestData extends Data
+{
+    public function __construct(
+        public string $country,
+        #[ConditionalRequiredIfSubclass('country', 'DE')]
+        public ?string $vatNumber,
+    ) {}
+}
+
+class ConditionalSubclassThenPresentTestData extends Data
+{
+    public function __construct(
+        public string $country,
+        #[ConditionalRequiredIfSubclass('country', 'DE'), Present]
+        public ?string $subclassThenPresent,
     ) {}
 }

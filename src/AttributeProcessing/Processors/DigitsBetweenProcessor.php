@@ -2,10 +2,10 @@
 
 namespace Abrha\LaravelDataDocs\AttributeProcessing\Processors;
 
-use Abrha\LaravelDataDocs\AttributeProcessing\AttributeProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\Base\DigitCountProcessor;
 use Abrha\LaravelDataDocs\Pipeline\Context\ParameterContext;
 
-final class DigitsBetweenProcessor implements AttributeProcessor
+final class DigitsBetweenProcessor extends DigitCountProcessor
 {
     public function process(object $attribute, ParameterContext $context): void
     {
@@ -13,12 +13,18 @@ final class DigitsBetweenProcessor implements AttributeProcessor
         $minDigits = $parameters[0] ?? null;
         $maxDigits = $parameters[1] ?? null;
 
-        if ($minDigits !== null && $maxDigits !== null) {
-            $min = (int) ('1' . str_repeat('0', $minDigits - 1));
-            $max = (int) str_repeat('9', $maxDigits);
-            $context->minimum = $min;
-            $context->maximum = $max;
-            $context->descriptions[] = "Must have between <code>{$minDigits}</code> and <code>{$maxDigits}</code> digits.";
+        if (! is_int($minDigits) || ! is_int($maxDigits) || $minDigits < 1 || $maxDigits < 1) {
+            return;
         }
+
+        // A reversed count rejects every value, so it writes no contradictory bound.
+        if ($minDigits > $maxDigits) {
+            $context->descriptions[] = "Note: must have between <code>{$minDigits}</code> and <code>{$maxDigits}</code> digits, which no value can have, so any request that sends this field fails validation.";
+
+            return;
+        }
+
+        $this->writeDigitCount($context, $minDigits, $maxDigits);
+        $context->descriptions[] = "Must have between <code>{$minDigits}</code> and <code>{$maxDigits}</code> digits.";
     }
 }

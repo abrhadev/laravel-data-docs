@@ -13,9 +13,7 @@ final class GreaterThanOrEqualToProcessor extends ComparisonProcessor
         $value = $parameters[0] ?? null;
 
         if ($value !== null) {
-            $valueStr = $this->extractValue($value);
-            $context->minimum = is_numeric($valueStr) ? (int) $valueStr : null;
-            $context->descriptions[] = "Must be greater than or equal to {$this->operand($value)}.";
+            $this->compare($context, $value, 'gte');
         }
     }
 }

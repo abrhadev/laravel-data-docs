@@ -6,11 +6,9 @@ use Abrha\LaravelDataDocs\Pipeline\Context\ParameterContext;
 use Abrha\LaravelDataDocs\Pipeline\ParameterPipelineStage;
 use Abrha\LaravelDataDocs\ValueObjects\EnumInfo;
 use Abrha\LaravelDataDocs\ValueObjects\EnumType;
-use BackedEnum;
 use ReflectionEnum;
 use Spatie\LaravelData\Enums\DataTypeKind;
 use Spatie\LaravelData\Support\Types\NamedType;
-use TypeError;
 use UnitEnum;
 
 final class TypeStage implements ParameterPipelineStage
@@ -76,29 +74,31 @@ final class TypeStage implements ParameterPipelineStage
         return null;
     }
 
+    /**
+     * The enum's backing type, not its first case, decides the published type,
+     * so an enum with no cases is still typed. It accepts no value at all, so
+     * the field is published with an empty allowed set.
+     */
     private function setEnumInfo(ParameterContext $context, string $enumClass, bool $isArray): void
     {
-        if (!enum_exists($enumClass)) {
+        $backingTypeName = (new ReflectionEnum($enumClass))->getBackingType()?->getName();
+        $baseType = $backingTypeName === null ? 'string' : (self::TYPE_MAP[$backingTypeName] ?? $backingTypeName);
+        $context->type = $isArray ? $baseType . '[]' : $baseType;
+        $cases = $enumClass::cases();
+
+        if ($cases === []) {
+            $context->allowedValues = [];
+
             return;
         }
 
-        try {
-            $cases = $enumClass::cases();
-            if ($cases[0] instanceof BackedEnum) {
-                $backingTypeName = (new ReflectionEnum($enumClass))->getBackingType()?->getName();
-                if ($backingTypeName) {
-                    $baseType = self::TYPE_MAP[$backingTypeName] ?? $backingTypeName;
-                    $context->type = $isArray ? $baseType . '[]' : $baseType;
-                    $context->enumInfo = new EnumInfo(
-                        enumType: $backingTypeName === 'int' ? EnumType::INT_BACKED : EnumType::STRING_BACKED,
-                        cases: $cases
-                    );
-                }
-            } else {
-                $context->type = $isArray ? 'string[]' : 'string';
-                $context->enumInfo = new EnumInfo(enumType: EnumType::PURE, cases: $cases);
-            }
-        } catch (TypeError) {
-        }
+        $context->enumInfo = new EnumInfo(
+            enumType: match ($backingTypeName) {
+                null    => EnumType::PURE,
+                'int'   => EnumType::INT_BACKED,
+                default => EnumType::STRING_BACKED,
+            },
+            cases: $cases
+        );
     }
 }

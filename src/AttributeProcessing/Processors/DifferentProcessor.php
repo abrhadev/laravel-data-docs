@@ -9,6 +9,8 @@ final class DifferentProcessor extends ConditionProcessor
 {
     private const SENTENCE = 'Must differ from the value of %s.';
 
+    private const EACH_SENTENCE = 'Must differ from the value of each of %s.';
+
     public function process(object $attribute, ParameterContext $context): void
     {
         $parameters = $this->parametersOf($attribute);
@@ -17,12 +19,17 @@ final class DifferentProcessor extends ConditionProcessor
             return;
         }
 
-        $name = $this->extractFieldName($parameters[0]);
+        // Laravel checks every field of a reference written 'a,b'.
+        $names = array_values(array_filter($this->fieldNames([$parameters[0]]), fn(string $name) => $name !== ''));
 
-        if ($name === '') {
+        if ($names === []) {
             return;
         }
 
-        $context->descriptions[] = sprintf(self::SENTENCE, $this->fieldName($name));
+        $fields = array_map(fn(string $name) => $this->fieldName($name), $names);
+
+        $context->descriptions[] = count($fields) === 1
+            ? sprintf(self::SENTENCE, $fields[0])
+            : sprintf(self::EACH_SENTENCE, implode(', ', $fields));
     }
 }

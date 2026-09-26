@@ -14,8 +14,10 @@ use Spatie\LaravelData\Attributes\Validation\Declined;
 use Spatie\LaravelData\Attributes\Validation\DeclinedIf;
 use Spatie\LaravelData\Attributes\Validation\Different;
 use Spatie\LaravelData\Attributes\Validation\Email;
+use Spatie\LaravelData\Attributes\Validation\In;
 use Spatie\LaravelData\Attributes\Validation\InArray;
 use Spatie\LaravelData\Attributes\Validation\Min;
+use Spatie\LaravelData\Attributes\Validation\Rule;
 use Spatie\LaravelData\Attributes\Validation\Same;
 use Spatie\LaravelData\Data;
 use Spatie\LaravelData\Support\DataConfig;
@@ -78,6 +80,27 @@ it('AC4: publishes the confirmation companion directly after its source', functi
         ->and($parameters['password_confirmation']['type'])->toBe('string')
         ->and($parameters['password_confirmation']['description'])->toStartWith('Must match the value of <b><i>password</i></b>.')
         ->and($raw['password_confirmation']->location)->toBe($raw['password']->location);
+});
+
+it('publishes the companion of a confirmed rule string directly after its source', function () {
+    $parameters = crossFieldParameters(CrossFieldRuleConfirmationTestData::class);
+
+    expect(array_keys($parameters))->toBe(['password', 'password_confirmation', 'name', 'secret', 'secret_confirmation'])
+        ->and($parameters['password_confirmation']['description'])->toStartWith('Must match the value of <b><i>password</i></b>.');
+});
+
+it('publishes one companion for a Confirmed followed by an equal confirmed rule string', function () {
+    $parameters = crossFieldParameters(CrossFieldRuleConfirmationTestData::class);
+
+    expect(array_keys($parameters))->toBe(['password', 'password_confirmation', 'name', 'secret', 'secret_confirmation'])
+        ->and(crossFieldKeyAfter($parameters, 'secret'))->toBe('secret_confirmation');
+});
+
+it('publishes no companion for an array of Data source, but still its items', function () {
+    $parameters = crossFieldParameters(CrossFieldArrayConfirmationTestData::class);
+
+    expect($parameters)->toHaveKey('accounts[].password')
+        ->not->toHaveKey('accounts_confirmation');
 });
 
 it('AC5: pins that Confirmed reports no custom name, which D2 depends on', function () {
@@ -212,13 +235,32 @@ it('draws acceptance examples from the value set by type, unless an example is g
         ->and($parameters['explicit_example']['example'])->toBeFalse();
 });
 
-it('leaves an enum property to example generation, so its example is a published case', function () {
-    foreach (range(1, 5) as $ignored) {
-        $parameter = crossFieldParameters(CrossFieldAcceptanceTestData::class)['enum_consent'];
+it('publishes and exemplifies only the enum cases the acceptance rule takes', function (string $property, array $cases) {
+    $rules = CrossFieldAcceptanceTestData::getValidationRules([])[$property];
 
-        expect($parameter['enumValues'])->toBe(['agreed', 'refused'])
-            ->and($parameter['enumValues'])->toContain($parameter['example']);
+    foreach (range(1, 20) as $ignored) {
+        $parameter = crossFieldParameters(CrossFieldAcceptanceTestData::class)[$property];
+
+        expect($parameter['enumValues'])->toBe($cases)
+            ->and($cases)->toContain($parameter['example'])
+            ->and(validator([$property => $parameter['example']], [$property => $rules])->passes())->toBeTrue();
     }
+})->with([
+    'Accepted on a string enum' => ['enum_yes_no', ['yes']],
+    'Accepted before an In'     => ['enum_accepted_in', ['yes']],
+    'Declined after an In'      => ['enum_in_declined', ['no']],
+    'Declined on an int enum'   => ['enum_int_declined', [0]],
+    'Accepted on an int enum'   => ['enum_int_accepted', [1]],
+]);
+
+it('states an empty allowed set for an enum no case of which the acceptance rule takes', function () {
+    $parameter = crossFieldParameters(CrossFieldAcceptanceTestData::class)['enum_consent'];
+    $rules = CrossFieldAcceptanceTestData::getValidationRules([])['enum_consent'];
+
+    expect($parameter)->not->toHaveKey('enumValues')
+        ->and($parameter['description'])->toContain('Note: the list of allowed values is empty')
+        ->and(validator(['enum_consent' => 'agreed'], ['enum_consent' => $rules])->passes())->toBeFalse()
+        ->and(validator(['enum_consent' => 'refused'], ['enum_consent' => $rules])->passes())->toBeFalse();
 });
 
 it('publishes only values Laravel accepts or declines', function () {
@@ -280,6 +322,26 @@ class CrossFieldCustomConfirmationTestData extends Data
     ) {}
 }
 
+class CrossFieldRuleConfirmationTestData extends Data
+{
+    public function __construct(
+        #[Rule('confirmed')]
+        public string $password,
+        public string $name,
+        #[Confirmed, Rule('confirmed')]
+        public string $secret,
+    ) {}
+}
+
+class CrossFieldArrayConfirmationTestData extends Data
+{
+    /** @param CrossFieldConfirmationChildData[] $accounts */
+    public function __construct(
+        #[Confirmed]
+        public array $accounts,
+    ) {}
+}
+
 class CrossFieldConfirmationTestData extends Data
 {
     public function __construct(
@@ -319,6 +381,18 @@ enum CrossFieldConsent: string
     case Refused = 'refused';
 }
 
+enum CrossFieldYesNo: string
+{
+    case Yes = 'yes';
+    case No = 'no';
+}
+
+enum CrossFieldIntFlag: int
+{
+    case Off = 0;
+    case On = 1;
+}
+
 class CrossFieldAcceptanceTestData extends Data
 {
     public function __construct(
@@ -334,9 +408,64 @@ class CrossFieldAcceptanceTestData extends Data
         public bool $explicit_example,
         #[Accepted]
         public CrossFieldConsent $enum_consent,
+        #[Accepted]
+        public CrossFieldYesNo $enum_yes_no,
+        #[Accepted, In(['yes', 'no'])]
+        public CrossFieldYesNo $enum_accepted_in,
+        #[In(['yes', 'no']), Declined]
+        public CrossFieldYesNo $enum_in_declined,
+        #[Declined]
+        public CrossFieldIntFlag $enum_int_declined,
+        #[Accepted]
+        public CrossFieldIntFlag $enum_int_accepted,
         #[AcceptedIf('country', 'DE')]
         public ?bool $marketing_opt_in = null,
         #[DeclinedIf('plan', 'trial')]
         public ?bool $auto_renew = null,
+    ) {}
+}
+
+it('documents a consumer subclass of Same as Same, as the validator enforces it', function () {
+    $parameters = crossFieldParameters(CrossFieldSameSubclassTestData::class);
+    $rules = CrossFieldSameSubclassTestData::getValidationRules(['other' => 'a', 'mirror' => 'b']);
+
+    expect($parameters['mirror']['description'])->toContain('Must match the value of <b><i>other</i></b>.')
+        ->and($rules['mirror'])->toContain('same:other')
+        ->and(validator(['other' => 'a', 'mirror' => 'b'], $rules)->passes())->toBeFalse()
+        ->and(validator(['other' => 'a', 'mirror' => 'a'], $rules)->passes())->toBeTrue();
+});
+
+it('documents a consumer subclass of Accepted as Accepted, required and not nullable', function () {
+    $parameters = crossFieldParameters(CrossFieldAcceptedSubclassTestData::class);
+    $rules = CrossFieldAcceptedSubclassTestData::getValidationRules([]);
+
+    expect($parameters['agreed']['description'])->toContain('Must be sent as one of ' . acceptedList() . '.')
+        ->and($parameters['agreed']['required'])->toBeTrue()
+        ->and($parameters['agreed']['nullable'])->toBeFalse()
+        ->and(validator([], $rules)->passes())->toBeFalse()
+        ->and(validator(['agreed' => null], $rules)->passes())->toBeFalse()
+        ->and(validator(['agreed' => true], $rules)->passes())->toBeTrue();
+});
+
+#[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
+class CrossFieldAcceptedSubclass extends Accepted {}
+
+class CrossFieldAcceptedSubclassTestData extends Data
+{
+    public function __construct(
+        #[CrossFieldAcceptedSubclass]
+        public ?bool $agreed,
+    ) {}
+}
+
+#[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
+class CrossFieldSameSubclass extends Same {}
+
+class CrossFieldSameSubclassTestData extends Data
+{
+    public function __construct(
+        public string $other,
+        #[CrossFieldSameSubclass('other')]
+        public string $mirror,
     ) {}
 }

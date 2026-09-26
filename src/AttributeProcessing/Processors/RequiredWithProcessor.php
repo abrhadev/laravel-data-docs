@@ -11,7 +11,7 @@ final class RequiredWithProcessor extends RequirementConditionProcessor
 
     private const ANY_SENTENCE = 'Required when any of %s is present.';
 
-    public function process(object $attribute, ParameterContext $context): void
+    protected function describe(object $attribute, ParameterContext $context): void
     {
         $parameters = $this->parametersOf($attribute);
 

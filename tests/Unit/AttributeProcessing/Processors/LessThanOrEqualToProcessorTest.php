@@ -43,3 +43,32 @@ it('renders a field reference as a field name, not a value', function () {
     expect($context->descriptions)->toContain('Must be less than or equal to <b><i>min_price</i></b>.')
         ->and($context->maximum)->toBeNull();
 });
+
+it('publishes a fractional bound exactly', function () {
+    $context = conditionContext();
+    $context->type = 'number';
+
+    $this->processor->process(new LessThanOrEqualTo(9.5), $context);
+
+    expect($context->maximum)->toBe(9.5)
+        ->and($context->descriptions)->toBe(['Must be less than or equal to <code>9.5</code>.']);
+});
+
+it('writes a float bound an int holds exactly', function () {
+    $context = conditionContext();
+    $context->type = 'number';
+
+    $this->processor->process(new LessThanOrEqualTo(5.0), $context);
+
+    expect($context->maximum)->toBe(5);
+});
+
+it('leaves a bound another attribute set when the operand is a field reference', function () {
+    $context = conditionContext();
+    $context->type = 'integer';
+    $context->maximum = 7;
+
+    $this->processor->process(new LessThanOrEqualTo(new FieldReference('other')), $context);
+
+    expect($context->maximum)->toBe(7);
+});

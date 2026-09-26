@@ -24,6 +24,14 @@ it('names a field given as a field reference', function () {
     expect($context->descriptions)->toBe(['Must differ from the value of <b><i>email</i></b>.']);
 });
 
+it('names each field of a comma-joined list', function () {
+    $context = conditionContext();
+
+    $this->processor->process(new Different('a,b'), $context);
+
+    expect($context->descriptions)->toBe(['Must differ from the value of each of <b><i>a</i></b>, <b><i>b</i></b>.']);
+});
+
 it('writes nothing but a description', function () {
     $context = conditionContext();
 

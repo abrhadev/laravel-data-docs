@@ -11,6 +11,9 @@ final class StaticAttributeProcessor implements AttributeProcessor
         private readonly ?string $format = null,
         private readonly ?string $pattern = null,
         private readonly string $description = '',
+        private readonly ?string $exampleFormat = null,
+        private readonly ?string $valuePattern = null,
+        private readonly ?string $valueRule = null,
     ) {}
 
     public function process(object $attribute, ParameterContext $context): void
@@ -21,6 +24,15 @@ final class StaticAttributeProcessor implements AttributeProcessor
 
         if ($this->pattern !== null) {
             $context->pattern = $this->pattern;
+            $context->valuePatterns[] = $this->valuePattern ?? $this->pattern;
+        }
+
+        if ($this->valueRule !== null) {
+            $context->valueRules[] = $this->valueRule;
+        }
+
+        if ($this->exampleFormat !== null) {
+            $context->exampleFormat = $this->exampleFormat;
         }
 
         if ($this->description !== '') {

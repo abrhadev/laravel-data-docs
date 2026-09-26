@@ -2,7 +2,11 @@
 
 namespace Abrha\LaravelDataDocs\AttributeProcessing\Processors\Base;
 
+use Abrha\LaravelDataDocs\AttributeProcessing\ReplacedRules;
 use Abrha\LaravelDataDocs\Pipeline\Context\ParameterContext;
+use BackedEnum;
+use Spatie\LaravelData\Attributes\Validation\In;
+use UnitEnum;
 
 abstract class AcceptanceProcessor extends ConditionProcessor
 {
@@ -37,9 +41,27 @@ abstract class AcceptanceProcessor extends ConditionProcessor
         return implode(', ', $tokens) . ', or ' . $last;
     }
 
+    /**
+     * An enum property holds one of its cases, so only the cases whose value
+     * Laravel's accepted / declined takes (compared strictly, as it does)
+     * remain published and drawn as the example.
+     *
+     * @param array<int, string|int|bool> $values
+     */
+    protected function narrowEnum(ParameterContext $context, array $values): void
+    {
+        $context->keepEnumCases(fn(UnitEnum $case) => in_array($case instanceof BackedEnum ? $case->value : $case->name, $values, true));
+    }
+
+    /**
+     * An #[In] on the field narrows the value set (accepted and declined are
+     * value rules), so its example is drawn from that set instead, in either
+     * declaration order.
+     */
     protected function applyExample(ParameterContext $context, bool $accepted): void
     {
-        if ($context->example !== null || $context->enumInfo !== null) {
+        if ($context->example !== null || $context->enumInfo !== null
+            || array_filter(ReplacedRules::documentedRules($context->property), fn(object $rule) => $rule instanceof In) !== []) {
             return;
         }
 

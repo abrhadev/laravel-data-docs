@@ -29,8 +29,10 @@ final class ConfirmedProcessor extends ConditionProcessor
         }
 
         $custom = isset($parameters[0]) ? $this->extractFieldName($parameters[0]) : '';
-        $name = $custom !== '' ? $custom : $context->property->name . '_confirmation';
-        $source = $this->fieldName($context->property->name);
+        // Laravel reads the confirmation under the input name the request uses.
+        $input = $context->property->inputMappedName ?? $context->property->name;
+        $name = $custom !== '' ? $custom : $input . '_confirmation';
+        $source = $this->fieldName($input);
 
         $context->descriptions[] = sprintf(self::SOURCE_SENTENCE, $this->fieldName($name));
         $context->confirmationCompanion = new ConfirmationCompanion(

@@ -12,6 +12,8 @@ final class AcceptedProcessor extends AcceptanceProcessor
     public function process(object $attribute, ParameterContext $context): void
     {
         $context->descriptions[] = sprintf(self::SENTENCE, $this->valueList(self::ACCEPTED_VALUES));
+        $context->valueRules[] = 'accepted';
         $this->applyExample($context, true);
+        $this->narrowEnum($context, self::ACCEPTED_VALUES);
     }
 }

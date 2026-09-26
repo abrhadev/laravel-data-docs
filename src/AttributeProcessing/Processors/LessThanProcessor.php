@@ -13,9 +13,7 @@ final class LessThanProcessor extends ComparisonProcessor
         $value = $parameters[0] ?? null;
 
         if ($value !== null) {
-            $valueStr = $this->extractValue($value);
-            $context->exclusiveMaximum = is_numeric($valueStr) ? (int) $valueStr : null;
-            $context->descriptions[] = "Must be less than {$this->operand($value)}.";
+            $this->compare($context, $value, 'lt');
         }
     }
 }

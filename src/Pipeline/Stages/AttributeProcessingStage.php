@@ -3,10 +3,10 @@
 namespace Abrha\LaravelDataDocs\Pipeline\Stages;
 
 use Abrha\LaravelDataDocs\AttributeProcessing\AttributeProcessorRegistry;
+use Abrha\LaravelDataDocs\AttributeProcessing\ReplacedRules;
 use Abrha\LaravelDataDocs\Attributes\DataDocsAttribute;
 use Abrha\LaravelDataDocs\Pipeline\Context\ParameterContext;
 use Abrha\LaravelDataDocs\Pipeline\ParameterPipelineStage;
-use Spatie\LaravelData\Support\Validation\ValidationRule;
 
 final class AttributeProcessingStage implements ParameterPipelineStage
 {
@@ -18,7 +18,11 @@ final class AttributeProcessingStage implements ParameterPipelineStage
             $processor = $registry->getProcessorFor($attribute::class);
             $processor?->process($attribute, $context);
         }
-        foreach ($context->property->attributes->all(ValidationRule::class) as $rule) {
+        foreach (ReplacedRules::documentedRules($context->property) as $rule) {
+            if (ReplacedRules::isReplaced($rule, $context->property)) {
+                continue;
+            }
+
             $processor = $registry->getProcessorFor($rule::class);
             $processor?->process($rule, $context);
         }

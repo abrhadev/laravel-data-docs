@@ -31,6 +31,8 @@ dataset('requirement expectations', [
     'Nullable attribute does not remove required'      => ['middleName', true, false, false],
     'Filled attribute rejects null on a nullable type' => ['filledNullable', false, false, false],
     'Present attribute still accepts null'             => ['presentNullable', true, true, false],
+    'Accepted attribute is required and rejects null'  => ['acceptedNullable', true, false, false],
+    'Declined attribute is required and rejects null'  => ['declinedNullable', true, false, false],
     'conditional attribute keeps a nullable type'      => ['conditionalNullable', false, true, false],
     'Sometimes attribute makes a property optional'    => ['couponCode', false, false, true],
     // Upstream removes Sometimes when it adds a requiring rule, and not the other
@@ -226,10 +228,52 @@ it('loses the sometimes flag when a conditional rule is present', function () {
     expect($status->onlyValidatedWhenPresent)->toBeFalse();
 });
 
-it('treats an unrecognised requiring rule as unconditional', function () {
+it('treats a subclass of a conditional requiring rule as conditional, as Laravel does', function () {
     $status = $this->resolver->resolve(conditionalProperty('customRequiring'));
+    $rules = ConditionalResolverTestData::getValidationRules([])['customRequiring'];
 
-    expect($status->required)->toBeTrue();
+    expect($status->required)->toBeFalse()
+        ->and($status->nullable)->toBeTrue()
+        ->and(Illuminate\Support\Facades\Validator::make([], ['customRequiring' => $rules])->passes())->toBeTrue();
+});
+
+it('treats a conditional subclass that emits a rule of its own as unconditional, as Laravel does', function () {
+    $status = $this->resolver->resolve(conditionalProperty('alwaysRequired'));
+    $rules = ConditionalResolverTestData::getValidationRules([])['alwaysRequired'];
+
+    expect($rules)->toContain('required')
+        ->and($status->required)->toBeTrue()
+        ->and($status->nullable)->toBeFalse()
+        ->and(Illuminate\Support\Facades\Validator::make(['accountType' => 'personal'], ['alwaysRequired' => $rules])->fails())->toBeTrue();
+});
+
+it('keeps a conditional subclass conditional while it emits a conditional keyword, as Laravel does', function (string $property) {
+    $status = $this->resolver->resolve(conditionalProperty($property));
+    $rules = ConditionalResolverTestData::getValidationRules([])[$property];
+
+    // The condition does not hold for a personal account, so the field may be omitted.
+    expect($status->required)->toBeFalse()
+        ->and(Illuminate\Support\Facades\Validator::make(['accountType' => 'personal'], [$property => $rules])->passes())->toBeTrue();
+})->with(['parametersOnly', 'restatedKeyword', 'otherConditional']);
+
+it('reads a conditional subclass that switches to another conditional implicit keyword as conditional, as Laravel does', function () {
+    $status = $this->resolver->resolve(conditionalProperty('ifAccepted'));
+    $rules = ConditionalResolverTestData::getValidationRules([])['ifAccepted'];
+
+    expect($rules)->toContain('required_if_accepted:accountType')
+        ->and($status->required)->toBeFalse()
+        ->and($status->nullable)->toBeTrue()
+        ->and(Illuminate\Support\Facades\Validator::make(['accountType' => 'no'], ['ifAccepted' => $rules])->passes())->toBeTrue()
+        ->and(Illuminate\Support\Facades\Validator::make(['accountType' => 'no', 'ifAccepted' => null], ['ifAccepted' => $rules])->passes())->toBeTrue()
+        ->and(Illuminate\Support\Facades\Validator::make(['accountType' => 'yes'], ['ifAccepted' => $rules])->fails())->toBeTrue();
+});
+
+it('lists exactly Laravel\'s implicit rules by keyword', function () {
+    $keywords = (new ReflectionClassConstant(RequirementResolver::class, 'IMPLICIT_KEYWORDS'))->getValue();
+    $implicit = (new ReflectionClass(Illuminate\Validation\Validator::class))->getDefaultProperties()['implicitRules'];
+
+    expect(array_map(fn(string $keyword) => Illuminate\Support\Str::studly($keyword), array_keys($keywords)))
+        ->toEqualCanonicalizing($implicit);
 });
 
 class ConditionalResolverTestData extends Data
@@ -253,6 +297,16 @@ class ConditionalResolverTestData extends Data
         public string|Optional $conditionalOptional,
         #[SubclassedRequiredIf('accountType', 'business')]
         public ?string $customRequiring,
+        #[AlwaysRequiredIf('accountType', 'business')]
+        public ?string $alwaysRequired,
+        #[ParametersOnlyRequiredIf('accountType', 'business')]
+        public ?string $parametersOnly,
+        #[RestatedKeywordRequiredIf('accountType', 'business')]
+        public ?string $restatedKeyword,
+        #[UnlessKeywordRequiredIf('accountType', 'personal')]
+        public ?string $otherConditional,
+        #[IfAcceptedKeywordRequiredIf('accountType')]
+        public ?string $ifAccepted,
         #[Spatie\LaravelData\Attributes\Validation\RequiredIf('accountType', 'business')]
         public string $conditionalPlain,
         #[Spatie\LaravelData\Attributes\Validation\Present]
@@ -265,9 +319,63 @@ class ConditionalResolverTestData extends Data
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class SubclassedRequiredIf extends Spatie\LaravelData\Attributes\Validation\RequiredIf {}
 
+#[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
+class ParametersOnlyRequiredIf extends Spatie\LaravelData\Attributes\Validation\RequiredIf
+{
+    public function parameters(): array
+    {
+        return parent::parameters();
+    }
+}
+
+#[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
+class RestatedKeywordRequiredIf extends Spatie\LaravelData\Attributes\Validation\RequiredIf
+{
+    public static function keyword(): string
+    {
+        return 'required_if';
+    }
+}
+
+#[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
+class UnlessKeywordRequiredIf extends Spatie\LaravelData\Attributes\Validation\RequiredIf
+{
+    public static function keyword(): string
+    {
+        return 'required_unless';
+    }
+}
+
+#[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
+class IfAcceptedKeywordRequiredIf extends Spatie\LaravelData\Attributes\Validation\RequiredIf
+{
+    public static function keyword(): string
+    {
+        return 'required_if_accepted';
+    }
+}
+
+#[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
+class AlwaysRequiredIf extends Spatie\LaravelData\Attributes\Validation\RequiredIf
+{
+    public static function keyword(): string
+    {
+        return 'required';
+    }
+
+    public function parameters(): array
+    {
+        return [];
+    }
+}
+
 class RequirementResolverTestData extends Data
 {
     public function __construct(
+        #[Spatie\LaravelData\Attributes\Validation\Accepted]
+        public ?bool $acceptedNullable,
+        #[Spatie\LaravelData\Attributes\Validation\Declined]
+        public ?bool $declinedNullable,
         #[Spatie\LaravelData\Attributes\Validation\Required]
         public ?string $email,
         #[Spatie\LaravelData\Attributes\Validation\Nullable]
@@ -321,5 +429,46 @@ class ProhibitionResolverTestData extends Data
         public string $prohibitedFirst,
         #[Spatie\LaravelData\Attributes\Validation\Prohibited]
         public string $defaulted = 'x',
+    ) {}
+}
+
+it('treats a rule implementing RequiringRule directly as unconditional', function () {
+    $property = app(DataConfig::class)
+        ->getDataClass(DirectRequiringResolverTestData::class)
+        ->properties
+        ->first(fn($candidate) => $candidate->name === 'code');
+    $status = $this->resolver->resolve($property);
+    $rules = DirectRequiringResolverTestData::getValidationRules([]);
+
+    expect($status)->not->toBeNull()
+        ->and($status->required)->toBeTrue()
+        ->and(Illuminate\Support\Facades\Validator::make([], $rules)->fails())->toBeTrue()
+        ->and(Illuminate\Support\Facades\Validator::make(['code' => 'a'], $rules)->passes())->toBeTrue();
+});
+
+#[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
+class DirectRequiringRule extends Spatie\LaravelData\Attributes\Validation\StringValidationAttribute implements Spatie\LaravelData\Support\Validation\RequiringRule
+{
+    public static function keyword(): string
+    {
+        return 'required';
+    }
+
+    public function parameters(): array
+    {
+        return [];
+    }
+
+    public static function create(string ...$parameters): static
+    {
+        return new static();
+    }
+}
+
+class DirectRequiringResolverTestData extends Data
+{
+    public function __construct(
+        #[DirectRequiringRule]
+        public ?string $code,
     ) {}
 }

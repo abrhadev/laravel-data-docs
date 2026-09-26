@@ -47,7 +47,7 @@ Marker and payload attributes. `DataDocsAttribute` is an empty interface. Attrib
 
 Docblocks on these classes include usage examples and PHP code fences. That is source-as-is; this canvas does not treat those comments as runtime behavior.
 
-A subclass of `Description`, `Example` or `QueryParameter` is collected but does nothing: the registry looks a processor up by the exact class (framework canvas). A `Hidden` subclass is honoured because Spatie files it under its parent. A custom `DataDocsAttribute` implementor is collected but does nothing until a processor is registered for its class.
+A subclass of `Description`, `Example` or `QueryParameter`, declared with its own `#[Attribute]` (PHP attributes are not inherited, and Spatie fails to load a Data class using a class without one), is processed as the attribute it extends (the registry falls back to the nearest registered parent, framework canvas), and a `Hidden` subclass is honoured because Spatie files it under its parent. A custom `DataDocsAttribute` implementor is collected but does nothing until a processor is registered for its class or a parent.
 
 Known divergences:
 
@@ -59,7 +59,7 @@ Known divergences:
 
 ## Structure
 
-One interface, five attributes; the package ships no subclasses (a user subclass of `Description`, `Example` or `QueryParameter` does nothing, see Approach). Processors and strategies depend inward on these types. Attributes do not depend on pipeline or Scribe.
+One interface, five attributes; the package ships no subclasses (a user subclass is processed as its parent, see Approach). Processors and strategies depend inward on these types. Attributes do not depend on pipeline or Scribe.
 
 The three processors live in `src/AttributeProcessing/Processors/` beside the family processors, but this canvas owns them. They depend on `ParameterContext`, and `QueryParameterProcessor` on `ParameterLocation`.
 
@@ -79,7 +79,7 @@ The three processors live in `src/AttributeProcessing/Processors/` beside the fa
 
 - PHP attribute: `TARGET_PROPERTY` and `IS_REPEATABLE`.
 - Constructor: variadic `string ...$descriptions` stored in readonly `descriptions` array (may be empty if called with no strings).
-- Class docblock states the placement: custom text follows the generated type sentence and precedes the validation and requirement sentences, wherever the attribute is declared. That holds because `TypeDescriptionStage` runs after `AttributeProcessingStage` and prepends the type sentence, `AttributeProcessingStage` processes `DataDocsAttribute` instances before Spatie validation rules, and the requirement sentences are appended later by the pipeline. A custom type's sentences, appended earlier by `CustomTypeStage`, come before the `Description` text. `README.md` states the order for the type and validation sentences only; it does not mention the requirement sentences or a custom type's sentences.
+- Class docblock states the placement: custom text follows the generated type sentence and precedes the validation and requirement sentences, wherever the attribute is declared. It also follows any `#[In]` / `#[NotIn]` value sentences, which `TypeDescriptionStage` writes together with the type sentence (parameter metadata pipeline canvas); the docblock does not name them. That holds because `TypeDescriptionStage` runs after `AttributeProcessingStage` and prepends the type sentence, `AttributeProcessingStage` processes `DataDocsAttribute` instances before Spatie validation rules, and the requirement sentences are appended later by the pipeline. A custom type's sentences, appended earlier by `CustomTypeStage`, come before the `Description` text. `README.md` states the order for the type and validation sentences only; it does not mention the requirement sentences, the value sentences or a custom type's sentences.
 
 ### Example
 
@@ -98,7 +98,7 @@ The three processors live in `src/AttributeProcessing/Processors/` beside the fa
 
 ### Processors
 
-Package attributes are read via public properties, not `parameters()`. Registered after every validation-attribute row; `AttributeProcessingStage` runs them before any validation attribute, because it visits `DataDocsAttribute` instances first.
+Package attributes are read via public properties, not `parameters()`. Registered after every validation-attribute row; `AttributeProcessingStage` runs them before any validation attribute, because it visits `DataDocsAttribute` instances first. Package attributes are not validation rules, so the framework's `#[Rule]` replacement (`ReplacedRules`) never skips or repeats them.
 
 | Attribute | Processor | Writes | Behaviour |
 | --- | --- | --- | --- |
@@ -117,9 +117,9 @@ Package attributes are read via public properties, not `parameters()`. Registere
 ## Safeguards
 
 - Description is the only repeatable attribute in this set.
-- On a Data property, Description text lands after the type sentence and before every validation and requirement sentence, independent of where the attribute is declared. `tests/Integration/Pipeline/DescriptionOrderTest.php` pins one complete description through the default pipeline, with `Description` declared last.
+- On a Data property, Description text lands after the type sentence and the `#[In]` / `#[NotIn]` value sentences, and before every other validation and requirement sentence, independent of where the attribute is declared. `tests/Integration/Pipeline/DescriptionOrderTest.php` pins one complete description through the default pipeline, with `Description` declared last, one with `In` and `NotIn` declared before and after `Description` (where `NotIn` is folded into the allowed set), and one with only a `NotIn` declared after `Description`, whose own sentence precedes the custom text. The same file runs consumer subclasses of `Example`, `QueryParameter` and `Hidden` through the pipeline and pins that each behaves as its parent.
 - ResponseData does not validate that `dtoClass` exists or is a Laravel Data class; `ParameterGenerator` returns no fields for a class that does not exist (DTO extraction canvas).
 - Example allows any PHP value including null; null is indistinguishable later from “no example” at ExampleGenerationStage (`example !== null`).
-- An explicit `#[Example]` is published as given: generation applies only to a field with no example (example generation canvas), so an example that breaks the field's own rules is the author's to fix.
+- An explicit `#[Example]` is published as given: generation, the pattern filter and the `NotIn` redraw apply only to generated examples (example generation canvas), so an example that breaks the field's own rules is the author's to fix. Such an example also decides nothing about which pattern is published: `publishedPattern` weighs the example only when every rule of the field accepts it: its pattern and format rules, its length and numeric bounds, and its `#[In]` set (parameter metadata canvas; `InTest` "keeps an approximate pattern beside an explicit example Laravel rejects" and "…for a bound or the In set": `#[Example('cafébar'), Lowercase, Max(3)]` and `#[Example('café'), Lowercase, In(['abc', 'xyz'])]` keep `^[a-z]+$`).
 - QueryParameter does not encode HTTP method; GET vs body routing is ParameterFilter’s job.
-- A non-null `#[Example]` value is never overwritten by a validation-attribute processor: `ExampleProcessor` runs first, and any processor that writes `example` does so only when it is null (today the acceptance processors, cross-field and acceptance canvas), so `#[Example(null)]` can be.
+- A non-null `#[Example]` value is never overwritten by a validation-attribute processor: `ExampleProcessor` runs first, and any processor that writes `example` does so only when it is null (today the acceptance processors, cross-field and acceptance canvas), so `#[Example(null)]` can be. `UrlProcessor` records a scheme instead of writing the example (identifiers canvas).

@@ -2,6 +2,8 @@
 
 namespace Abrha\LaravelDataDocs\AttributeProcessing\Processors\Base;
 
+use Abrha\LaravelDataDocs\AttributeProcessing\ReplacedRules;
+use Abrha\LaravelDataDocs\Pipeline\Context\ParameterContext;
 use BackedEnum;
 use Spatie\LaravelData\Support\Validation\References\ExternalReference;
 use Throwable;
@@ -28,27 +30,37 @@ abstract class ConditionProcessor extends FieldReferenceProcessor
     }
 
     /**
-     * @param array<int, mixed> $references
+     * Laravel splits a condition's rule string as CSV, so a field written 'a,b'
+     * reads the field a, and b becomes the first compared value.
      *
-     * @return array<int, string>
+     * @return array{0: string, 1: list<string>}
      */
-    protected function fieldNames(array $references): array
+    protected function conditionParts(mixed $field): array
     {
-        return array_map(fn($reference) => $this->extractFieldName($reference), $references);
+        $names = $this->fieldNames([$field]);
+
+        return [(string) array_shift($names), $names];
     }
 
     /**
+     * Spatie joins a condition's values into the rule string with commas, and
+     * Laravel splits them back as CSV, so 'DE,AT' is two values.
+     *
      * @param array<int, mixed> $values
      */
     protected function renderValues(array $values): ?string
     {
-        if ($values === []) {
-            return null;
+        $split = [];
+
+        foreach ($values as $value) {
+            array_push($split, ...(is_string($value)
+                ? array_map(fn(?string $part) => $part ?? '', str_getcsv($value, ',', '"', '\\'))
+                : [$value]));
         }
 
         $rendered = [];
 
-        foreach ($values as $value) {
+        foreach ($split as $value) {
             if ($value instanceof ExternalReference) {
                 return null;
             }
@@ -56,9 +68,10 @@ abstract class ConditionProcessor extends FieldReferenceProcessor
             $rendered[] = match (true) {
                 $value instanceof BackedEnum => $this->code($value->name) . " ({$value->value})",
                 $value instanceof UnitEnum   => $this->code($value->name),
-                $value === null              => $this->code('null'),
-                is_bool($value)              => $this->code($value ? 'true' : 'false'),
-                default                      => $this->code((string) $value),
+                // Spatie writes a PHP null as an empty part, which Laravel compares as ''.
+                $value === null, $value === '' => $this->code('""'),
+                is_bool($value)                => $this->code($value ? 'true' : 'false'),
+                default                        => $this->code((string) $value),
             };
         }
 
@@ -67,5 +80,29 @@ abstract class ConditionProcessor extends FieldReferenceProcessor
         }
 
         return 'one of: ' . implode(', ', $rendered);
+    }
+
+    /**
+     * The validation attributes declared after this one, in the order upstream
+     * walks them. An attribute not declared on the property is treated as
+     * declared first.
+     *
+     * @return array<int, object>
+     */
+    protected function declaredAfter(object $attribute, ParameterContext $context): array
+    {
+        return ReplacedRules::declaredAfter($attribute, $context->property);
+    }
+
+    /**
+     * The rules upstream adds for a declaration: a #[Rule] is expanded the
+     * way AttributesRuleInferrer expands it, and one that cannot be expanded
+     * counts as nothing.
+     *
+     * @return array<int, object>
+     */
+    protected function expand(object $candidate): array
+    {
+        return ReplacedRules::expand($candidate);
     }
 }

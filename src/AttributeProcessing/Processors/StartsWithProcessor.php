@@ -11,12 +11,29 @@ final class StartsWithProcessor implements AttributeProcessor
     {
         $parameters = $attribute->parameters();
 
-        if (!empty($parameters)) {
-            $flatParameters = is_array($parameters[0]) ? $parameters[0] : $parameters;
-            $escapedValues = array_map(fn($arg) => preg_quote($arg, '/'), $flatParameters);
-            $context->pattern = '^(' . implode('|', $escapedValues) . ')';
-            $formattedValues = array_map(fn($arg) => "<code>$arg</code>", $flatParameters);
-            $context->descriptions[] = 'Must start with one of: ' . implode(', ', $formattedValues) . '.';
+        $flatParameters = is_array($parameters[0] ?? null) ? $parameters[0] : $parameters;
+
+        if (array_filter($flatParameters, 'is_string') !== $flatParameters) {
+            return;
         }
+
+        // Spatie joins the values with commas and Laravel splits them back as
+        // CSV, skipping an empty one, so 'a,b' means a or b.
+        $needles = array_values(array_unique(array_filter(
+            str_getcsv(implode(',', $flatParameters), ',', '"', '\\'),
+            fn(?string $needle) => $needle !== null && $needle !== ''
+        )));
+
+        if ($needles === []) {
+            $context->descriptions[] = 'Note: must start with a value, but none is given, so any request that sends this field fails validation.';
+
+            return;
+        }
+
+        $escapedValues = array_map(fn($arg) => preg_quote($arg, '/'), $needles);
+        $context->pattern = '^(' . implode('|', $escapedValues) . ')';
+        $context->valuePatterns[] = $context->pattern;
+        $formattedValues = array_map(fn($arg) => "<code>$arg</code>", $needles);
+        $context->descriptions[] = 'Must start with one of: ' . implode(', ', $formattedValues) . '.';
     }
 }

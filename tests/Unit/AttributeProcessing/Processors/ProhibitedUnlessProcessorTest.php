@@ -38,13 +38,13 @@ it('renders a backed enum by its case name and backing value', function () {
     ]);
 });
 
-it('renders a null value as null', function () {
+it('renders a null value as the empty string Laravel compares against', function () {
     $context = conditionContext();
 
     $this->processor->process(new ProhibitedUnless('role', [null]), $context);
 
     expect($context->descriptions)->toBe([
-        'Must not be sent unless <b><i>role</i></b> is <code>null</code>; the request is rejected if it is.',
+        'Must not be sent unless <b><i>role</i></b> is <code>""</code>; the request is rejected if it is.',
     ]);
 });
 

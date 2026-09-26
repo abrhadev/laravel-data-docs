@@ -90,6 +90,43 @@ it('carries a confirmation companion without publishing it', function () {
         ->and($context->toParameter()->openApiAttributes)->toBe([]);
 });
 
+it('carries a date format for the example without publishing it', function () {
+    $context = new ParameterContext('born_on', mock(DataProperty::class));
+
+    expect($context->dateFormat)->toBeNull();
+
+    $context->dateFormat = 'd/m/Y';
+
+    expect($context->toParameter()->toArray())->not->toHaveKey('dateFormat')
+        ->and($context->toParameter()->openApiAttributes)->toBe([]);
+});
+
+it('keeps numeric bounds of a numeric string out of the published schema', function () {
+    $context = new ParameterContext('code', mock(DataProperty::class));
+
+    expect($context->numericString)->toBeFalse();
+
+    $context->type = 'string';
+    $context->numericString = true;
+    $context->minimum = 1;
+    $context->maximum = 9;
+    $context->exclusiveMinimum = 0;
+    $context->exclusiveMaximum = 10;
+    $context->maxLength = 4;
+
+    expect($context->toParameter()->openApiAttributes)->toBe(['maxLength' => 4])
+        ->and($context->toParameter()->toArray())->not->toHaveKey('numericString');
+});
+
+it('publishes a fractional bound exactly and an integral one as an int', function () {
+    $context = new ParameterContext('ratio', mock(DataProperty::class));
+    $context->type = 'number';
+    $context->maximum = 3;
+    $context->exclusiveMinimum = 0.5;
+
+    expect($context->toParameter()->openApiAttributes)->toBe(['maximum' => 3, 'exclusiveMinimum' => 0.5]);
+});
+
 it('converts to Parameter with minimal properties', function () {
     $property = mock(DataProperty::class);
 
@@ -364,3 +401,146 @@ it('preserves nullable when explicitly set to true', function () {
 
     expect($parameter->nullable)->toBeTrue();
 });
+
+it('types the allowed values to the field', function (string $type, array $allowed, array $expected) {
+    $context = new ParameterContext('test', mock(DataProperty::class));
+    $context->type = $type;
+    $context->allowedValues = $allowed;
+
+    expect($context->allowedValueList())->toBe($expected);
+})->with([
+    'string'        => ['string', ['a', 'b'], ['a', 'b']],
+    'integer'       => ['integer', ['1', '-2'], [1, -2]],
+    'number'        => ['number', ['1.5', '2'], [1.5, 2.0]],
+    'boolean'       => ['boolean', ['1', '0'], [true]],
+    'boolean false' => ['boolean', ['1', ''], [true, false]],
+    'integer items' => ['integer[]', ['3'], [3]],
+]);
+
+it('publishes no allowed-value list when the set is unset or empty', function (?array $allowed) {
+    $context = new ParameterContext('test', mock(DataProperty::class));
+    $context->type = 'string';
+    $context->allowedValues = $allowed;
+
+    expect($context->allowedValueList())->toBeNull()
+        ->and($context->toParameter()->enumValues)->toBeNull();
+})->with([
+    'unset' => [null],
+    'empty' => [[]],
+]);
+
+it('narrows the allowed values to those the value pattern accepts', function (?array $allowed, ?string $valuePattern, ?array $expected) {
+    $context = new ParameterContext('test', mock(DataProperty::class));
+    $context->allowedValues = $allowed;
+    $context->valuePatterns = $valuePattern === null ? [] : [$valuePattern];
+
+    expect($context->acceptedAllowedValues())->toBe($expected);
+})->with([
+    'a pattern filters the values'         => [['eur', 'USD'], '^[^\p{Ll}\p{Lt}]*$', ['USD']],
+    'no pattern keeps every value'         => [['eur', 'USD'], null, ['eur', 'USD']],
+    'an uncompilable pattern filters none' => [['eur', 'USD'], '(', ['eur', 'USD']],
+    'no allowed values stays null'         => [null, '^[^\p{Ll}\p{Lt}]*$', null],
+]);
+
+it('publishes the allowed values as enumValues and never the excluded values', function () {
+    $context = new ParameterContext('test', mock(DataProperty::class));
+    $context->type = 'integer';
+    $context->allowedValues = ['1', '2'];
+    $context->excludedValues = ['3'];
+
+    $parameter = $context->toParameter();
+
+    expect($parameter->enumValues)->toBe([1, 2])
+        ->and($parameter->openApiAttributes)->not->toHaveKey('excludedValues')
+        ->and(json_encode($parameter->toArray()))->not->toContain('3');
+});
+
+it('keeps the exact pattern of an enum even when one of its cases fails it', function () {
+    $context = new ParameterContext('test', mock(DataProperty::class));
+    $context->type = 'string';
+    $context->enumInfo = new EnumInfo(EnumType::STRING_BACKED, ContextTestStringBackedEnum::cases());
+    $context->pattern = '^[A-Z]+$';
+    $context->valuePatterns = ['^[A-Z]+$'];
+
+    $parameter = $context->toParameter();
+
+    expect($parameter->enumValues)->toBe(['a', 'b'])
+        ->and($parameter->openApiAttributes['pattern'] ?? null)->toBe('^[A-Z]+$');
+});
+
+it('drops the pattern of an allowed-value set one of whose values fails it', function () {
+    $context = new ParameterContext('test', mock(DataProperty::class));
+    $context->type = 'string';
+    $context->allowedValues = ['ABC', 'abc'];
+    $context->pattern = '^[A-Z]+$';
+
+    $parameter = $context->toParameter();
+
+    expect($parameter->enumValues)->toBe(['ABC', 'abc'])
+        ->and($parameter->openApiAttributes)->not->toHaveKey('pattern');
+});
+
+it('never publishes the example-only hints', function () {
+    $context = new ParameterContext('test', mock(DataProperty::class));
+    $context->type = 'string';
+    $context->uriScheme = 'ftp';
+    $context->exampleFormat = 'ipv4';
+
+    $published = json_encode($context->toParameter()->toArray());
+
+    expect($published)->not->toContain('ftp')
+        ->not->toContain('ipv4')
+        ->and($context->toParameter()->openApiAttributes)->not->toHaveKey('format');
+});
+
+it('runs the value rules on a boolean as true or false, not its string form', function (string $rule, array $expected) {
+    $context = new ParameterContext('flag', mock(DataProperty::class));
+    $context->type = 'boolean';
+    $context->allowedValues = ['1', '', '0'];
+    $context->valueRules = [$rule];
+
+    expect($context->acceptedAllowedValues())->toBe($expected);
+})->with([
+    'declined' => ['declined', ['', '0']],
+    'accepted' => ['accepted', ['1']],
+]);
+
+it('keeps the string form for the value rules of a field that is not a boolean', function () {
+    $context = new ParameterContext('text', mock(DataProperty::class));
+    $context->type = 'string';
+    $context->allowedValues = ['1', '', 'no'];
+    $context->valueRules = ['declined'];
+
+    expect($context->acceptedAllowedValues())->toBe(['no']);
+});
+
+it('keeps the enum cases a predicate accepts, and none leaves an empty allowed set', function () {
+    $context = new ParameterContext('size', mock(DataProperty::class));
+    $context->enumInfo = new EnumInfo(EnumType::STRING_BACKED, ContextTestStringBackedEnum::cases());
+
+    $context->keepEnumCases(fn(ContextTestStringBackedEnum $case) => $case->value === 'b');
+
+    expect($context->enumInfo?->toArray())->toBe(['b']);
+
+    $context->keepEnumCases(fn() => false);
+
+    expect($context->enumInfo)->toBeNull()
+        ->and($context->allowedValues)->toBe([]);
+});
+
+it('weighs an example for an approximate pattern only when its bounds and the In set accept it', function (?array $allowed, ?int $maxLength, string $example, bool $kept) {
+    $context = new ParameterContext('code', mock(DataProperty::class));
+    $context->type = 'string';
+    $context->pattern = '^[a-z]+$';
+    $context->valuePatterns = ['^\p{Ll}+$'];
+    $context->allowedValues = $allowed;
+    $context->maxLength = $maxLength;
+    $context->example = $example;
+
+    expect(array_key_exists('pattern', $context->toParameter()->openApiAttributes))->toBe($kept);
+})->with([
+    'accepted by every rule'  => [null, null, 'café', false],
+    'longer than maxLength'   => [null, 3, 'café', true],
+    'outside the In set'      => [['abc'], null, 'café', true],
+    'rejected by the pattern' => [null, null, 'CAFÉ', true],
+]);

@@ -101,7 +101,22 @@ it('applies config-based type with pattern', function () {
 
     expect($result->type)->toBe('number')
         ->and($result->pattern)->toBe('^\d{12,13}$')
+        ->and($result->valuePatterns)->toBe(['^\d{12,13}$'])
         ->and($result->descriptions)->toBe(['Must be a timestamp']);
+});
+
+it('sets no value pattern for a config without a pattern', function () {
+    $stage = new CustomTypeStage([
+        'UnpatternedClass' => new CustomTypeConfig(type: 'string', descriptions: ['Unpatterned']),
+    ]);
+
+    $property = $this->dataConfig->getDataClass(CustomTypeTestStringData::class)->properties->first();
+    $context = new ParameterContext($property->name, $property);
+    $context->type = 'UnpatternedClass';
+    $result = $stage->process($context);
+
+    expect($result->pattern)->toBeNull()
+        ->and($result->valuePatterns)->toBe([]);
 });
 
 it('applies config-based type with all constraint fields', function () {
@@ -143,6 +158,30 @@ it('applies config-based type with all constraint fields', function () {
         ->and($result->maxItems)->toBe(10)
         ->and($result->multipleOf)->toBe(5)
         ->and($result->descriptions)->toBe(['Complex type']);
+});
+
+it('sets the item constraints of an array custom type aside for its items', function () {
+    $stage = new CustomTypeStage([
+        'MoneyClass[]' => new CustomTypeConfig(
+            type: 'string[]',
+            descriptions: ['Each item is an amount.'],
+            pattern: '^\d+$',
+            minLength: 1,
+            minItems: 2,
+        ),
+    ]);
+
+    $property = $this->dataConfig->getDataClass(CustomTypeTestStringData::class)->properties->first();
+    $context = new ParameterContext($property->name, $property);
+    $context->type = 'MoneyClass[]';
+    $result = $stage->process($context);
+
+    expect($result->pattern)->toBeNull()
+        ->and($result->minLength)->toBeNull()
+        ->and($result->minItems)->toBe(2)
+        ->and($result->itemSchema)->toBe(['pattern' => '^\d+$', 'minLength' => 1])
+        ->and($result->valuePatterns)->toBe(['^\d+$'])
+        ->and($result->toParameter()->openApiAttributes)->toMatchArray(['minItems' => 2, 'items' => ['pattern' => '^\d+$', 'minLength' => 1]]);
 });
 
 it('merges descriptions from config with existing descriptions', function () {
@@ -187,7 +226,89 @@ it('uses processor when registered', function () {
 
     expect($result->type)->toBe('number')
         ->and($result->pattern)->toBe('^[0-9]+$')
+        ->and($result->valuePatterns)->toBe(['^[0-9]+$'])
         ->and($result->descriptions)->toBe(['Processed by custom processor']);
+});
+
+it('narrows an #[In] set of a processed class to the values its pattern accepts', function () {
+    $processor = new class implements CustomTypeProcessor {
+        public function process(string $className, ParameterContext $context): void
+        {
+            $context->type = 'string';
+            $context->pattern = '^[A-Z]+$';
+        }
+    };
+    CustomTypeProcessorRegistry::getInstance()->register(CustomTypeTestUppercaseCode::class, $processor);
+
+    $property = $this->dataConfig->getDataClass(CustomTypeTestInData::class)->properties->first();
+    $context = Abrha\LaravelDataDocs\Pipeline\PipelineFactory::createDefault()->process(new ParameterContext($property->name, $property));
+
+    expect($context->toParameter()->enumValues)->toBe(['ABC']);
+});
+
+class CustomTypeTestUppercaseCode {}
+
+class CustomTypeTestInData extends Data
+{
+    public function __construct(
+        #[Spatie\LaravelData\Attributes\Validation\In(['abc', 'ABC'])]
+        public CustomTypeTestUppercaseCode $code,
+    ) {}
+}
+
+it('falls back to a string type when a processor leaves a type OpenAPI does not know', function (string $className, string $type, array $descriptions) {
+    $processor = new class implements CustomTypeProcessor {
+        public function process(string $className, ParameterContext $context): void
+        {
+            $context->descriptions[] = 'Only described.';
+        }
+    };
+    CustomTypeProcessorRegistry::getInstance()->register($className, $processor);
+
+    $property = $this->dataConfig->getDataClass(CustomTypeTestStringData::class)->properties->first();
+    $context = new ParameterContext($property->name, $property);
+    $context->type = $className;
+
+    $result = (new CustomTypeStage())->process($context);
+
+    expect($result->type)->toBe($type)
+        ->and($result->descriptions)->toBe($descriptions);
+})->with([
+    'a class'           => ['UntypedProcessorClass', 'string', ['Only described.']],
+    'an array of class' => ['UntypedProcessorClass[]', 'string[]', ['Only described.', 'Each item must be a UntypedProcessorClass.']],
+]);
+
+it('keeps value patterns a processor sets of its own', function () {
+    CustomTypeProcessorRegistry::getInstance()->register('OwnValuePatternClass', new class implements CustomTypeProcessor {
+        public function process(string $className, ParameterContext $context): void
+        {
+            $context->type = 'string';
+            $context->pattern = '^[A-Za-z]+$';
+            $context->valuePatterns = ['^[a-z]+$'];
+        }
+    });
+
+    $property = $this->dataConfig->getDataClass(CustomTypeTestStringData::class)->properties->first();
+    $context = new ParameterContext($property->name, $property);
+    $context->type = 'OwnValuePatternClass';
+
+    expect((new CustomTypeStage())->process($context)->valuePatterns)->toBe(['^[a-z]+$']);
+});
+
+it('writes the item sentence once when the processor already wrote it', function () {
+    CustomTypeProcessorRegistry::getInstance()->register('SelfDescribedItemClass[]', new class implements CustomTypeProcessor {
+        public function process(string $className, ParameterContext $context): void
+        {
+            $context->type = 'array';
+            $context->descriptions[] = 'Each item must be a SelfDescribedItemClass.';
+        }
+    });
+
+    $property = $this->dataConfig->getDataClass(CustomTypeTestStringData::class)->properties->first();
+    $context = new ParameterContext($property->name, $property);
+    $context->type = 'SelfDescribedItemClass[]';
+
+    expect((new CustomTypeStage())->process($context)->descriptions)->toBe(['Each item must be a SelfDescribedItemClass.']);
 });
 
 it('falls back to default string type with generic description', function () {
@@ -200,8 +321,110 @@ it('falls back to default string type with generic description', function () {
     $result = $stage->process($context);
 
     expect($result->type)->toBe('string')
-        ->and($result->descriptions)->toBe(['Must be a UnknownCustomClass']);
+        ->and($result->descriptions)->toBe(['Must be a UnknownCustomClass.']);
 });
+
+it('falls back to an array of strings for an array of an unconfigured class', function () {
+    $property = $this->dataConfig->getDataClass(CustomTypeTestStringData::class)->properties->first();
+
+    $context = new ParameterContext($property->name, $property);
+    $context->type = 'UnknownCustomClass[]';
+    $result = (new CustomTypeStage())->process($context);
+
+    expect($result->type)->toBe('string[]')
+        ->and($result->descriptions)->toBe(['Each item must be a UnknownCustomClass.']);
+});
+
+it('publishes an array of an unconfigured class as an array through the pipeline', function () {
+    $property = $this->dataConfig->getDataClass(CustomTypeTestArrayData::class)->properties->first();
+    $context = Abrha\LaravelDataDocs\Pipeline\PipelineFactory::createDefault()->process(new ParameterContext($property->name, $property));
+    $rules = CustomTypeTestArrayData::getValidationRules([])['dates'];
+
+    expect($context->type)->toBe('string[]')
+        ->and($context->example)->toBeArray()
+        ->and(Illuminate\Support\Facades\Validator::make(['dates' => $context->example], ['dates' => $rules])->passes())->toBeTrue();
+});
+
+it('draws the items of an array custom type from its published item schema and narrows #[In] by it', function () {
+    $pipeline = Abrha\LaravelDataDocs\Pipeline\PipelineFactory::createDefault(['custom_types' => [
+        'CustomTypeTestAmount[]' => ['type' => 'string[]', 'descriptions' => ['Each item is an amount.'], 'pattern' => '^[0-9]+$', 'minLength' => 3],
+    ]]);
+    $properties = $this->dataConfig->getDataClass(CustomTypeTestAmountData::class)->properties;
+    $amounts = $properties->first(fn($property) => $property->name === 'amounts');
+    $picked = $properties->first(fn($property) => $property->name === 'picked');
+
+    foreach (range(1, 20) as $run) {
+        $example = $pipeline->process(new ParameterContext($amounts->name, $amounts))->example;
+
+        expect($example)->toBeArray()->not->toBeEmpty();
+
+        foreach ($example as $item) {
+            expect($item)->toMatch('/^[0-9]{3,}$/');
+        }
+    }
+
+    expect($pipeline->process(new ParameterContext($picked->name, $picked))->toParameter()->enumValues)->toBe(['123']);
+});
+
+it('leaves out an approximate item pattern that a published #[In] item rejects', function () {
+    CustomTypeProcessorRegistry::getInstance()->register('CustomTypeTestLetters[]', new class implements CustomTypeProcessor {
+        public function process(string $className, ParameterContext $context): void
+        {
+            $context->type = 'string[]';
+            $context->pattern = '^[a-z]+$';
+            $context->valuePatterns = ['^\\p{Ll}+$'];
+            $context->minLength = 2;
+        }
+    });
+    $pipeline = Abrha\LaravelDataDocs\Pipeline\PipelineFactory::createDefault();
+    $properties = $this->dataConfig->getDataClass(CustomTypeTestLettersData::class)->properties;
+    $parameter = fn(string $name) => $pipeline->process(new ParameterContext($name, $properties->first(fn($property) => $property->name === $name)))->toParameter();
+
+    expect($parameter('unicode')->enumValues)->toBe(['ab', 'café'])
+        ->and($parameter('unicode')->openApiAttributes['items'])->toBe(['minLength' => 2])
+        ->and($parameter('ascii')->enumValues)->toBe(['ab', 'cd'])
+        ->and($parameter('ascii')->openApiAttributes['items'])->toBe(['pattern' => '^[a-z]+$', 'minLength' => 2])
+        ->and($parameter('open')->openApiAttributes['items'])->toBe(['pattern' => '^[a-z]+$', 'minLength' => 2]);
+});
+
+class CustomTypeTestLetters {}
+
+class CustomTypeTestLettersData extends Data
+{
+    /**
+     * @param CustomTypeTestLetters[] $unicode
+     * @param CustomTypeTestLetters[] $ascii
+     * @param CustomTypeTestLetters[] $open
+     */
+    public function __construct(
+        #[Spatie\LaravelData\Attributes\Validation\In(['ab', 'a', 'café'])]
+        public array $unicode,
+        #[Spatie\LaravelData\Attributes\Validation\In(['ab', 'cd'])]
+        public array $ascii,
+        public array $open,
+    ) {}
+}
+
+class CustomTypeTestAmount {}
+
+class CustomTypeTestAmountData extends Data
+{
+    /**
+     * @param CustomTypeTestAmount[] $amounts
+     * @param CustomTypeTestAmount[] $picked
+     */
+    public function __construct(
+        public array $amounts,
+        #[Spatie\LaravelData\Attributes\Validation\In(['123', '12', 'abc'])]
+        public array $picked,
+    ) {}
+}
+
+class CustomTypeTestArrayData extends Data
+{
+    /** @param DateTimeImmutable[] $dates */
+    public function __construct(public array $dates) {}
+}
 
 it('returns same context instance', function () {
     $stage = new CustomTypeStage();

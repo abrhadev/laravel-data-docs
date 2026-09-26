@@ -22,6 +22,27 @@ abstract class FieldReferenceProcessor implements AttributeProcessor
         return (string) $value;
     }
 
+    /**
+     * Laravel splits a rule's parameters as CSV, so a reference written 'a,b'
+     * names the two fields a and b, as a condition's values are split.
+     *
+     * @param array<int, mixed> $references
+     *
+     * @return array<int, string>
+     */
+    protected function fieldNames(array $references): array
+    {
+        $names = [];
+
+        foreach ($references as $reference) {
+            foreach (str_getcsv($this->extractFieldName($reference), ',', '"', '\\') as $part) {
+                $names[] = $part ?? '';
+            }
+        }
+
+        return $names;
+    }
+
     protected function code(string $value): string
     {
         return "<code>{$value}</code>";
@@ -30,12 +51,5 @@ abstract class FieldReferenceProcessor implements AttributeProcessor
     protected function fieldName(string $name): string
     {
         return "<b><i>{$name}</i></b>";
-    }
-
-    protected function operand(mixed $value): string
-    {
-        return $value instanceof FieldReference
-            ? $this->fieldName($value->name)
-            : $this->code((string) $value);
     }
 }

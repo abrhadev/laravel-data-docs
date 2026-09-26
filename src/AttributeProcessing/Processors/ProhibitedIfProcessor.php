@@ -2,10 +2,10 @@
 
 namespace Abrha\LaravelDataDocs\AttributeProcessing\Processors;
 
-use Abrha\LaravelDataDocs\AttributeProcessing\Processors\Base\ConditionProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\Base\ProhibitionExclusionProcessor;
 use Abrha\LaravelDataDocs\Pipeline\Context\ParameterContext;
 
-final class ProhibitedIfProcessor extends ConditionProcessor
+final class ProhibitedIfProcessor extends ProhibitionExclusionProcessor
 {
     private const SENTENCE = 'Must not be sent when %s is %s; the request is rejected if it is.';
 
@@ -19,19 +19,21 @@ final class ProhibitedIfProcessor extends ConditionProcessor
             return;
         }
 
-        $compared = (array) $parameters[1];
+        [$name, $extra] = $this->conditionParts($parameters[0]);
+        $compared = [...$extra, ...(array) $parameters[1]];
 
         // Laravel rejects a declaration with no compared value at validation
-        // time, so there is no enforced condition to state.
+        // time, so there is no enforced condition to state; a field written
+        // 'a,b' compares a with b.
         if ($compared === []) {
             return;
         }
 
-        $field = $this->fieldName($this->extractFieldName($parameters[0]));
+        $field = $this->fieldName($name);
         $values = $this->renderValues($compared);
 
-        $context->descriptions[] = $values === null
+        $this->appendEnforced($attribute, $context, $values === null
             ? sprintf(self::DEGRADED_SENTENCE, $field)
-            : sprintf(self::SENTENCE, $field, $values);
+            : sprintf(self::SENTENCE, $field, $values));
     }
 }

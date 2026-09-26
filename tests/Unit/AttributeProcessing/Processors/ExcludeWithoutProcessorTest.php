@@ -28,6 +28,16 @@ it('states the absence condition for a field given as a reference', function () 
     ]);
 });
 
+it('states the absence condition for several fields', function () {
+    $context = conditionContext();
+
+    $this->processor->process(new ExcludeWithout('a,b'), $context);
+
+    expect($context->descriptions)->toBe([
+        'Not validated, and removed from the validated input when any of <b><i>a</i></b>, <b><i>b</i></b> is not present.',
+    ]);
+});
+
 it('writes nothing but a description', function () {
     $context = conditionContext();
 

@@ -1,9 +1,13 @@
 <?php
 
 use Abrha\LaravelDataDocs\AttributeProcessing\Processors\DeclinedProcessor;
+use Abrha\LaravelDataDocs\Pipeline\Context\ParameterContext;
 use Abrha\LaravelDataDocs\ValueObjects\EnumInfo;
 use Abrha\LaravelDataDocs\ValueObjects\EnumType;
 use Spatie\LaravelData\Attributes\Validation\Declined;
+use Spatie\LaravelData\Attributes\Validation\In;
+use Spatie\LaravelData\Data;
+use Spatie\LaravelData\Support\DataConfig;
 
 beforeEach(function () {
     $this->processor = new DeclinedProcessor();
@@ -52,6 +56,48 @@ it('leaves an enum property to example generation', function () {
     expect($context->example)->toBeNull();
 });
 
+it('records declined as a value rule, so an #[In] set is narrowed by it', function () {
+    $context = conditionContext();
+
+    $this->processor->process(new Declined(), $context);
+
+    expect($context->valueRules)->toBe(['declined']);
+});
+
+it('leaves the example to an #[In] set on the field', function () {
+    $property = app(DataConfig::class)->getDataClass(DeclinedProcessorTestInData::class)->properties->first();
+    $context = new ParameterContext($property->name, $property);
+    $context->type = 'integer';
+
+    $this->processor->process(new Declined(), $context);
+
+    expect($context->example)->toBeNull()
+        ->and($context->valueRules)->toBe(['declined']);
+});
+
+it('keeps only the enum cases declined takes', function () {
+    $context = conditionContext();
+    $context->type = 'integer';
+    $context->enumInfo = new EnumInfo(EnumType::INT_BACKED, DeclinedProcessorTestEnum::cases());
+
+    $this->processor->process(new Declined(), $context);
+
+    expect($context->enumInfo?->toArray())->toBe([0])
+        ->and($context->example)->toBeNull();
+});
+
+it('leaves an empty allowed set when no enum case passes declined', function () {
+    $context = conditionContext();
+    $context->type = 'string';
+    $context->enumInfo = new EnumInfo(EnumType::STRING_BACKED, ConditionAccountType::cases());
+
+    $this->processor->process(new Declined(), $context);
+
+    expect($context->enumInfo)->toBeNull()
+        ->and($context->allowedValues)->toBe([])
+        ->and($context->example)->toBeNull();
+});
+
 it('writes nothing but a description', function () {
     $context = conditionContext();
 
@@ -63,3 +109,17 @@ it('writes nothing but a description', function () {
         ->and($context->pattern)->toBeNull()
         ->and($context->minLength)->toBeNull();
 });
+
+enum DeclinedProcessorTestEnum: int
+{
+    case Off = 0;
+    case On = 1;
+}
+
+class DeclinedProcessorTestInData extends Data
+{
+    public function __construct(
+        #[In(['yes', 'no', 0, 1])]
+        public string $value,
+    ) {}
+}

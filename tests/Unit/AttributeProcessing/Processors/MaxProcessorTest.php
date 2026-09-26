@@ -5,6 +5,25 @@ use Abrha\LaravelDataDocs\Pipeline\Context\ParameterContext;
 use Spatie\LaravelData\Attributes\Validation\Max;
 use Spatie\LaravelData\Data;
 use Spatie\LaravelData\Support\DataConfig;
+use Spatie\LaravelData\Support\Validation\References\RouteParameterReference;
+
+it('rounds a fractional length bound down', function () {
+    $context = conditionContext();
+    $context->type = 'string';
+
+    (new MaxProcessor())->process(new Max(2.5), $context);
+
+    expect($context->maxLength)->toBe(2);
+});
+
+it('writes no negative length bound', function () {
+    $context = conditionContext();
+    $context->type = 'string';
+
+    (new MaxProcessor())->process(new Max(-1.5), $context);
+
+    expect($context->maxLength)->toBeNull();
+});
 
 beforeEach(function () {
     $this->processor = new MaxProcessor();
@@ -80,4 +99,48 @@ it('sets maxItems for array type', function () {
         ->and($context->maximum)->toBeNull()
         ->and($context->maxLength)->toBeNull()
         ->and($context->descriptions)->toContain('Must have maximum <code>10</code> items.');
+});
+
+it('skips an external reference it cannot document', function () {
+    $context = conditionContext();
+    $context->type = 'string';
+
+    $this->processor->process(new Max(new RouteParameterReference('limit')), $context);
+
+    expect($context->descriptions)->toBe([])
+        ->and($context->maximum)->toBeNull()
+        ->and($context->maxLength)->toBeNull()
+        ->and($context->maxItems)->toBeNull();
+});
+
+it('skips a non-finite bound it cannot document', function (float $bound) {
+    $context = conditionContext();
+    $context->type = 'number';
+
+    $this->processor->process(new Max($bound), $context);
+
+    expect($context->descriptions)->toBe([])
+        ->and($context->minimum)->toBeNull()
+        ->and($context->maximum)->toBeNull();
+})->with([INF, -INF, NAN]);
+
+it('publishes a numeric bound an int cannot hold exactly', function (float $bound) {
+    $context = conditionContext();
+    $context->type = 'number';
+
+    $this->processor->process(new Max($bound), $context);
+
+    expect($context->descriptions)->toHaveCount(1)
+        ->and($context->descriptions[0])->toContain("<code>{$bound}</code>")
+        ->and($context->minimum)->toBeNull()
+        ->and($context->maximum)->toBe($bound);
+})->with([0.5, 1e20]);
+
+it('writes a float bound an int holds exactly as an integer constraint', function () {
+    $context = conditionContext();
+    $context->type = 'number';
+
+    $this->processor->process(new Max(10.0), $context);
+
+    expect($context->maximum)->toBe(10);
 });

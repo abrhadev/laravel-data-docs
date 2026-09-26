@@ -12,6 +12,8 @@ final class DeclinedProcessor extends AcceptanceProcessor
     public function process(object $attribute, ParameterContext $context): void
     {
         $context->descriptions[] = sprintf(self::SENTENCE, $this->valueList(self::DECLINED_VALUES));
+        $context->valueRules[] = 'declined';
         $this->applyExample($context, false);
+        $this->narrowEnum($context, self::DECLINED_VALUES);
     }
 }

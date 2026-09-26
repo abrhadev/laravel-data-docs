@@ -5,6 +5,7 @@ use Abrha\LaravelDataDocs\Pipeline\Context\ParameterContext;
 use Spatie\LaravelData\Attributes\Validation\Min;
 use Spatie\LaravelData\Data;
 use Spatie\LaravelData\Support\DataConfig;
+use Spatie\LaravelData\Support\Validation\References\RouteParameterReference;
 
 beforeEach(function () {
     $this->processor = new MinProcessor();
@@ -81,3 +82,76 @@ it('sets minItems for array type', function () {
         ->and($context->minLength)->toBeNull()
         ->and($context->descriptions)->toContain('Must have minimum <code>2</code> items.');
 });
+
+it('writes an integral float as an int', function () {
+    $context = conditionContext();
+    $context->type = 'number';
+
+    $this->processor->process(new Min(5.0), $context);
+
+    expect($context->minimum)->toBe(5);
+});
+
+it('writes a fractional length bound as the whole number it means', function () {
+    $context = conditionContext();
+    $context->type = 'string';
+
+    $this->processor->process(new Min(2.5), $context);
+
+    expect($context->minLength)->toBe(3)
+        ->and($context->minimum)->toBeNull()
+        ->and($context->descriptions)->toBe(['Must have minimum <code>2.5</code> characters.']);
+});
+
+it('writes a fractional item-count bound as the whole number it means', function () {
+    $context = conditionContext();
+    $context->type = 'string[]';
+
+    $this->processor->process(new Min(1.2), $context);
+
+    expect($context->minItems)->toBe(2);
+});
+
+it('writes no negative length bound', function () {
+    $context = conditionContext();
+    $context->type = 'string';
+
+    $this->processor->process(new Min(-1), $context);
+
+    expect($context->minLength)->toBeNull();
+});
+
+it('skips an external reference it cannot document', function () {
+    $context = conditionContext();
+    $context->type = 'integer';
+
+    $this->processor->process(new Min(new RouteParameterReference('limit')), $context);
+
+    expect($context->descriptions)->toBe([])
+        ->and($context->minimum)->toBeNull()
+        ->and($context->minLength)->toBeNull()
+        ->and($context->minItems)->toBeNull();
+});
+
+it('skips a non-finite bound it cannot document', function (float $bound) {
+    $context = conditionContext();
+    $context->type = 'number';
+
+    $this->processor->process(new Min($bound), $context);
+
+    expect($context->descriptions)->toBe([])
+        ->and($context->minimum)->toBeNull()
+        ->and($context->maximum)->toBeNull();
+})->with([INF, -INF, NAN]);
+
+it('publishes a numeric bound an int cannot hold exactly', function (float $bound) {
+    $context = conditionContext();
+    $context->type = 'number';
+
+    $this->processor->process(new Min($bound), $context);
+
+    expect($context->descriptions)->toHaveCount(1)
+        ->and($context->descriptions[0])->toContain("<code>{$bound}</code>")
+        ->and($context->minimum)->toBe($bound)
+        ->and($context->maximum)->toBeNull();
+})->with([0.5, 1e20]);

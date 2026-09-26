@@ -43,6 +43,14 @@ it('returns null for unregistered attribute', function () {
     expect($processor)->toBeNull();
 });
 
+it('processes a subclass of a registered attribute as its nearest registered parent', function () {
+    $registry = AttributeProcessorRegistry::getInstance();
+
+    expect($registry->getProcessorFor(RegistryTestMin::class))->toBe($registry->getProcessorFor(Min::class))
+        ->and($registry->getProcessorFor(RegistryTestDescription::class))->toBe($registry->getProcessorFor(Abrha\LaravelDataDocs\Attributes\Description::class))
+        ->and($registry->getProcessorFor(RegistryTestMin::class))->not->toBeNull();
+});
+
 it('registers all default processors', function () {
     $registry = AttributeProcessorRegistry::getInstance();
 
@@ -119,3 +127,9 @@ it('throws exception when trying to unserialize', function () {
     $instance = AttributeProcessorRegistry::getInstance();
     $instance->__wakeup();
 })->throws(Exception::class, 'Cannot unserialize singleton');
+
+#[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
+class RegistryTestMin extends Min {}
+
+#[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_METHOD | Attribute::IS_REPEATABLE)]
+class RegistryTestDescription extends Abrha\LaravelDataDocs\Attributes\Description {}

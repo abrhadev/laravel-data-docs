@@ -2,10 +2,10 @@
 
 namespace Abrha\LaravelDataDocs\AttributeProcessing\Processors;
 
-use Abrha\LaravelDataDocs\AttributeProcessing\Processors\Base\ConditionProcessor;
+use Abrha\LaravelDataDocs\AttributeProcessing\Processors\Base\ProhibitionExclusionProcessor;
 use Abrha\LaravelDataDocs\Pipeline\Context\ParameterContext;
 
-final class ExcludeUnlessProcessor extends ConditionProcessor
+final class ExcludeUnlessProcessor extends ProhibitionExclusionProcessor
 {
     private const SENTENCE = 'Not validated, and removed from the validated input unless %s is %s.';
 
@@ -19,11 +19,12 @@ final class ExcludeUnlessProcessor extends ConditionProcessor
             return;
         }
 
-        $field = $this->fieldName($this->extractFieldName($parameters[0]));
-        $value = $this->renderValues([$parameters[1]]);
+        [$name, $extra] = $this->conditionParts($parameters[0]);
+        $field = $this->fieldName($name);
+        $value = $this->renderValues([...$extra, $parameters[1]]);
 
-        $context->descriptions[] = $value === null
+        $this->appendEnforced($attribute, $context, $value === null
             ? sprintf(self::DEGRADED_SENTENCE, $field)
-            : sprintf(self::SENTENCE, $field, $value);
+            : sprintf(self::SENTENCE, $field, $value));
     }
 }
