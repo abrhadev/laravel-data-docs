@@ -2,7 +2,7 @@
 
 All notable changes to `laravel-data-docs` will be documented in this file.
 
-## Unreleased
+## 0.5.0 - 2026-09-26
 
 ### Added
 
